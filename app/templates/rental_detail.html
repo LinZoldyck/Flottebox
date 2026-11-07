@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row spread">
+  <h1>Location {{ rental.reference }} <span class="badge {{ 'warn' if rental.source.value=='getaround' }}">{{ 'Getaround' if rental.source.value=='getaround' else 'Directe' }}</span></h1>
+  <a class="btn secondary" href="/rentals/{{ rental.id }}/contract.pdf">📄 Contrat PDF</a>
+</div>
+<div class="grid">
+  <div class="card">
+    <h2>Réservation</h2>
+    <p><b>{{ rental.vehicle.label }}</b><br>{{ rental.starts_at|dt }} → {{ rental.ends_at|dt }} ({{ rental.days }} j)<br>
+      Statut : <b>{{ rental.status.label }}</b></p>
+    <p class="small">Prix : {{ rental.price_total|euros }} · Km inclus : {{ rental.included_km }} · Km sup. : {{ rental.extra_km_price|euros }} · Dépôt : {{ rental.deposit_amount|euros }}</p>
+    {% if rental.notes %}<p class="small muted">{{ rental.notes }}</p>{% endif %}
+    {% if user.role.value != 'viewer' %}
+    <form method="post" action="/rentals/{{ rental.id }}/status" class="row">{{ csrf }}
+      <select name="status" style="width:auto">{% for s in rental.status.__class__ %}<option value="{{ s.value }}" {{ 'selected' if s==rental.status }}>{{ s.label }}</option>{% endfor %}</select>
+      <button class="secondary">Changer le statut</button>
+    </form>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Client</h2>
+    {% if rental.customer %}<p><a href="/customers/{{ rental.customer.id }}">{{ rental.customer.display_name }}</a><br>{{ rental.customer.phone }} · {{ rental.customer.email }}</p>
+      {% if rental.customer.missing_designation_fields %}<p class="small"><span class="badge warn">À compléter</span> {{ rental.customer.missing_designation_fields|join(', ') }}</p>{% endif %}
+    {% else %}<p class="muted">Non renseigné</p>{% endif %}
+  </div>
+  {% if rental.source.value == 'direct' %}
+  <div class="card">
+    <h2>Accès locataire</h2>
+    <p>Code d'accès : <b style="font-family:monospace;font-size:1.2rem">{{ rental.access_code }}</b><br>
+      <span class="small muted">{% if rental.access_code_sent_at %}SMS envoyé le {{ rental.access_code_sent_at|dt }}{% else %}Envoi automatique 30 min avant le début{% endif %}</span></p>
+    <p class="small muted">« {{ sms_preview }} »</p>
+    {% if user.role.value != 'viewer' %}
+    <form method="post" action="/rentals/{{ rental.id }}/send-code" class="row">{{ csrf }}
+      <label class="check"><input type="checkbox" name="regenerate"> nouveau code</label>
+      <button class="secondary">Envoyer le SMS maintenant</button>
+    </form>{% endif %}
+    <p class="small">Contrat accepté : {{ rental.terms_accepted_at|dt }} {{ rental.terms_accepted_name }}</p>
+  </div>
+  {% endif %}
+</div>
+
+{% for kind, title in [('checkin', 'État des lieux de départ'), ('checkout', 'État des lieux de retour')] %}
+{% set i = rental.inspection(kind) %}
+<div class="card">
+  <h2>{{ title }}</h2>
+  {% if i %}
+    <p class="small">{{ i.done_at|dt }} · {{ i.mileage }} km · carburant {{ i.fuel_level|fuel }} · propreté {{ i.cleanliness_score }}/5
+      {% if i.cleanliness_issues %}({{ i.cleanliness_issues }}){% endif %} · dommages : {{ i.damages or 'aucun' }}{% if i.notes %} · {{ i.notes }}{% endif %}</p>
+    <div class="photos">{% for p in i.photos %}<a href="/files/{{ p.path }}" target="_blank"><img src="/files/{{ p.path }}" alt="{{ p.angle }}" title="{{ p.angle }}" loading="lazy"></a>{% endfor %}</div>
+  {% else %}<p class="muted">Non réalisé{% if rental.source.value=='getaround' %} (géré dans l'application Getaround){% endif %}.</p>{% endif %}
+</div>
+{% endfor %}
+{% if rental.distance_km is not none %}<div class="card"><b>Distance :</b> {{ rental.distance_km }} km — <b>km supplémentaires :</b> {{ rental.extra_km }}</div>{% endif %}
+
+{% if rental.source.value == 'direct' %}
+<div class="card">
+  <h2>Facturation Pennylane</h2>
+  {% for inv in rental.invoices %}<p class="small">Facture #{{ inv.id }} — {{ inv.total_ttc|euros }} TTC — <span class="badge {{ 'ok' if inv.status=='sent' else 'err' if inv.status=='error' }}">{{ inv.status }}</span> {{ inv.error }}</p>{% endfor %}
+  {% if user.role.value != 'viewer' and not (rental.invoices|selectattr('status','equalto','sent')|list) %}
+  <form method="post" action="/rentals/{{ rental.id }}/invoice">{{ csrf }}<button>Créer la facture dans Pennylane (brouillon)</button></form>
+  {% endif %}
+  {% if user.role.value != 'viewer' %}<form method="post" action="/rentals/{{ rental.id }}/contract" style="margin-top:8px">{{ csrf }}<button class="secondary">Régénérer le contrat PDF</button></form>{% endif %}
+</div>
+{% endif %}
+
+{% if messages %}<div class="card"><h2>Messages</h2>
+  {% for m in messages %}<p class="small"><b>{{ 'Nous' if m.direction=='out' else 'Locataire' }}</b> ({{ m.sent_at|dt }}) : {{ m.body }}</p>{% endfor %}</div>{% endif %}
+{% if fines %}<div class="card"><h2>Contraventions liées</h2>
+  {% for f in fines %}<p><a href="/fines/{{ f.id }}">{{ f.notice_number or ('#' ~ f.id) }} — {{ f.offense_at|dt }}</a></p>{% endfor %}</div>{% endif %}
+{% endblock %}

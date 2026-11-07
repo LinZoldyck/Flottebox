@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row spread"><h1>Messagerie Getaround</h1>
+  {% if user.role.value != 'viewer' %}<form method="post" action="/getaround/sync" class="inline">{{ csrf }}<button class="secondary">↻ Relever les messages</button></form>{% endif %}</div>
+<p class="small muted">L'assistant répond seul aux questions simples (accès, horaires, carburant…) et vous transmet tout ce qui engage une décision (argent, dommages, annulation, litige…). Mode actuel : réglable dans Paramètres.</p>
+{% for m in messages %}
+<div class="card">
+  <div class="row spread small"><span><b>{{ 'Nous' if m.direction=='out' else 'Locataire' }}</b> · {{ m.sent_at|dt }}
+    {% if m.rental %}· <a href="/rentals/{{ m.rental.id }}">{{ m.rental.reference }}</a>{% endif %}</span>
+    {% if m.ai_status %}<span class="badge {{ 'ok' if m.ai_status=='sent' else 'err' if m.ai_status in ['escalated','error'] else 'warn' }}">
+      {{ {'draft':'Brouillon IA à valider','sent':'Répondu','escalated':'À traiter par vous','ignored':'Ignoré','error':'Erreur'}[m.ai_status] }}</span>{% endif %}</div>
+  <p>{{ m.body }}</p>
+  {% if m.ai_reason %}<p class="small muted">IA : {{ m.ai_category }} — {{ m.ai_reason }}</p>{% endif %}
+  {% if m.direction=='in' and m.ai_status in ['draft','escalated','error'] and user.role.value != 'viewer' %}
+  <form method="post" action="/messages/{{ m.id }}/send" class="stack">{{ csrf }}
+    <textarea name="reply" required>{{ m.ai_reply }}</textarea>
+    <div class="row"><button>Envoyer sur Getaround</button>
+      <button class="secondary" formaction="/messages/{{ m.id }}/dismiss" formnovalidate>Marquer comme traité</button></div>
+  </form>
+  {% elif m.ai_reply %}<p class="small"><b>Réponse :</b> {{ m.ai_reply }}</p>{% endif %}
+</div>
+{% else %}<div class="card muted">Aucun message. Configurez le jeton Getaround dans Paramètres.</div>{% endfor %}
+{% if user.role.value != 'viewer' %}
+<div class="card"><h2>Tester l'assistant</h2>
+  <form method="post" action="/messages/test" class="stack">{{ csrf }}<textarea name="body" placeholder="Bonjour, où se trouve le véhicule ?" required></textarea><div><button class="secondary">Tester (rien n'est envoyé)</button></div></form></div>
+{% endif %}
+{% endblock %}

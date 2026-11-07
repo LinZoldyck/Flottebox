@@ -1,0 +1,8 @@
+.git
+data
+tests
+docs
+robot
+*.pyc
+__pycache__
+.env

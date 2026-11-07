@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block main_class %}narrow{% endblock %}
+{% block title %}Ma location{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>🔑 Ma location</h1>
+  <p>Saisissez le code reçu par SMS (envoyé 30 minutes avant le début de votre location).</p>
+  <form method="post" action="/r" class="stack">{{ csrf }}
+    <input name="code" required autocomplete="one-time-code" autocapitalize="characters" placeholder="Ex. K7MX4P2Q"
+           style="font-size:1.6rem;text-align:center;letter-spacing:.2em;text-transform:uppercase">
+    <button class="big">Accéder à ma location</button>
+  </form>
+</div>
+{% endblock %}

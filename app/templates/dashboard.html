@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Tableau de bord</h1>
+<div class="grid">
+  <div class="card"><div class="muted small">Véhicules actifs</div><div class="kpi">{{ vehicles|length }}</div></div>
+  <div class="card"><div class="muted small">Locations à venir / en cours</div><div class="kpi">{{ upcoming|length }}</div></div>
+  <div class="card"><div class="muted small">Messages à traiter</div><div class="kpi">{{ escalated|length }}</div></div>
+  <div class="card"><div class="muted small">Contraventions à traiter</div><div class="kpi">{{ fines_todo|length }}</div></div>
+</div>
+<div class="card table-wrap">
+  <div class="row spread"><h2>Prochaines locations</h2><a class="btn" href="/rentals/new">+ Location directe</a></div>
+  <table><tr><th>Réf.</th><th>Source</th><th>Véhicule</th><th>Client</th><th>Début</th><th>Fin</th><th>Statut</th></tr>
+  {% for r in upcoming %}<tr>
+    <td><a href="/rentals/{{ r.id }}">{{ r.reference }}</a></td>
+    <td><span class="badge {{ 'warn' if r.source.value=='getaround' }}">{{ 'Getaround' if r.source.value=='getaround' else 'Directe' }}</span></td>
+    <td>{{ r.vehicle.plate }}</td><td>{{ r.customer.display_name if r.customer else '-' }}</td>
+    <td>{{ r.starts_at|dt }}</td><td>{{ r.ends_at|dt }}</td><td>{{ r.status.label }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Aucune location à venir.</td></tr>{% endfor %}
+  </table>
+</div>
+<div class="grid">
+  <div class="card">
+    <h2>Messages Getaround à traiter</h2>
+    {% for m in escalated[:6] %}<p class="small"><span class="badge {{ 'err' if m.ai_status=='escalated' else 'warn' }}">{{ m.ai_status }}</span> {{ m.body[:120] }}</p>{% else %}<p class="muted">Rien à traiter.</p>{% endfor %}
+    <a href="/messages">Voir la messagerie →</a>
+  </div>
+  <div class="card">
+    <h2>Contraventions</h2>
+    {% for f in fines_todo[:6] %}<p class="small"><a href="/fines/{{ f.id }}">{{ f.plate or 'Plaque ?' }} — {{ f.offense_at|dt }}</a> <span class="badge">{{ f.status.label }}</span></p>{% else %}<p class="muted">Aucune contravention en attente.</p>{% endfor %}
+    <a href="/fines">Gérer les contraventions →</a>
+  </div>
+  <div class="card">
+    <h2>À facturer</h2>
+    {% for r in to_invoice %}<p class="small"><a href="/rentals/{{ r.id }}">{{ r.reference }}</a> — {{ r.customer.display_name if r.customer else '' }}</p>{% else %}<p class="muted">Tout est facturé.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

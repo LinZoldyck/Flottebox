@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ customer.display_name if customer.id else 'Nouveau client' }}</h1>
+<form method="post" class="card stack">{{ csrf }}
+  <label class="check"><input type="checkbox" name="is_company" {{ 'checked' if customer.is_company }}> Client professionnel</label>
+  <div class="fields">
+    <label>Raison sociale <input name="company_name" value="{{ customer.company_name or '' }}"></label>
+    <label>SIRET <input name="siret" value="{{ customer.siret or '' }}"></label>
+    <label>Téléphone (SMS du code) <input name="phone" value="{{ customer.phone or '' }}" required></label>
+    <label>E-mail <input type="email" name="email" value="{{ customer.email or '' }}"></label>
+  </div>
+  <h2>Conducteur (contrat et désignation ANTAI)</h2>
+  {% set renter = False %}{% include "_customer_fields.html" %}
+  <p class="small muted">Les informations du conducteur peuvent aussi être complétées par le locataire lui-même au début de sa location.</p>
+  <div><button>Enregistrer</button> <a href="/customers" class="btn secondary">Annuler</a></div>
+</form>
+{% endblock %}

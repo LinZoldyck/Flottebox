@@ -1,0 +1,36 @@
+services:
+  app:
+    image: ghcr.io/linzoldyck/testrespo:latest   # ou « build: . » pour construire sur le Pi
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data          # base SQLite, photos, contrats, dossier des contraventions
+    ports:
+      - "8000:8000"
+
+  # Option A — HTTPS automatique (ports 80/443 ouverts sur la box vers le Pi + nom de domaine)
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [app]
+
+  # Option B — Cloudflare Tunnel (aucun port à ouvrir sur la box)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [app]
+
+volumes:
+  caddy_data:

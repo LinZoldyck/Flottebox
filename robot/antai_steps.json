@@ -1,0 +1,50 @@
+{
+  "_comment": "Description des étapes du formulaire de désignation ANTAI. Les libellés sont des expressions régulières (insensibles à la casse) recherchées dans les <label> du site. Vérifiez-les lors de la première utilisation et ajustez-les si le site change. 'value' pointe vers les données envoyées par l'application (avis.*, titulaire.*, conducteur.*).",
+  "start_url": "https://www.antai.gouv.fr/",
+  "steps": [
+    {
+      "name": "Accès à la désignation",
+      "before": "Dans le navigateur ouvert, allez jusqu'au formulaire « Désigner le conducteur » (rubrique Désignation / Je suis une personne morale), puis revenez ici."
+    },
+    {
+      "name": "Identification de l'avis",
+      "fields": [
+        {"description": "Numéro de l'avis", "locator": {"label": "num[ée]ro.*avis"}, "value": "avis.numero_avis"},
+        {"description": "Immatriculation", "locator": {"label": "immatriculation"}, "value": "avis.immatriculation"},
+        {"description": "Date de l'infraction", "locator": {"label": "date.*infraction"}, "value": "avis.date_infraction"},
+        {"description": "Heure de l'infraction", "locator": {"label": "heure.*infraction"}, "value": "avis.heure_infraction"}
+      ],
+      "next": {"role": "button", "name": "suivant|continuer|valider"}
+    },
+    {
+      "name": "Titulaire du certificat d'immatriculation (votre société)",
+      "fields": [
+        {"description": "Raison sociale", "locator": {"label": "raison sociale|d[ée]nomination"}, "value": "titulaire.raison_sociale"},
+        {"description": "SIRET", "locator": {"label": "siret"}, "value": "titulaire.siret"},
+        {"description": "Représentant", "locator": {"label": "repr[ée]sentant"}, "value": "titulaire.representant"},
+        {"description": "E-mail", "locator": {"label": "courriel|e-?mail"}, "value": "titulaire.email"}
+      ],
+      "next": {"role": "button", "name": "suivant|continuer"}
+    },
+    {
+      "name": "Conducteur désigné",
+      "fields": [
+        {"description": "Civilité", "locator": {"label": "civilit[ée]"}, "value": "conducteur.civilite", "type": "select"},
+        {"description": "Nom", "locator": {"label": "^nom"}, "value": "conducteur.nom"},
+        {"description": "Prénom", "locator": {"label": "pr[ée]nom"}, "value": "conducteur.prenom"},
+        {"description": "Date de naissance", "locator": {"label": "date de naissance"}, "value": "conducteur.date_naissance"},
+        {"description": "Lieu de naissance", "locator": {"label": "lieu de naissance"}, "value": "conducteur.lieu_naissance"},
+        {"description": "Adresse", "locator": {"label": "adresse|voie"}, "value": "conducteur.adresse"},
+        {"description": "Code postal", "locator": {"label": "code postal"}, "value": "conducteur.code_postal"},
+        {"description": "Ville", "locator": {"label": "ville|commune|localit[ée]"}, "value": "conducteur.ville"},
+        {"description": "N° de permis", "locator": {"label": "permis"}, "value": "conducteur.numero_permis"},
+        {"description": "Date de délivrance du permis", "locator": {"label": "d[ée]livrance"}, "value": "conducteur.date_permis"}
+      ],
+      "next": {"role": "button", "name": "suivant|continuer"}
+    },
+    {
+      "name": "Vérification, captcha et validation (manuel)",
+      "manual": "Vérifiez le récapitulatif, résolvez le captcha et cliquez vous-même sur le bouton de validation. Téléchargez l'accusé de réception."
+    }
+  ]
+}

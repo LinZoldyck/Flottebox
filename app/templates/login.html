@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block main_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>🚐 {{ app_name }}</h1>
+  <form method="post" action="/login" class="stack">{{ csrf }}
+    <label>E-mail <input type="email" name="email" required autofocus autocomplete="username"></label>
+    <label>Mot de passe <input type="password" name="password" required autocomplete="current-password"></label>
+    <button class="big">Se connecter</button>
+  </form>
+  {% if allow_signup %}<p class="muted small">Pas encore de compte ? <a href="/signup">Créer un espace pour ma société</a></p>{% endif %}
+  <p class="muted small">Vous êtes locataire ? <a href="/r">Accéder à ma location avec mon code</a></p>
+</div>
+{% endblock %}

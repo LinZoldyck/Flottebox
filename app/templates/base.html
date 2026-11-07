@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+{% if user %}
+<header class="top"><div class="bar">
+  <a class="brand" href="/">🚐 {{ app_name }}</a>
+  {% set p = request.url.path %}
+  <nav class="main">
+    <a href="/" class="{{ 'active' if p == '/' }}">Tableau de bord</a>
+    <a href="/rentals" class="{{ 'active' if p.startswith('/rentals') }}">Locations</a>
+    <a href="/vehicles" class="{{ 'active' if p.startswith('/vehicles') }}">Véhicules</a>
+    <a href="/customers" class="{{ 'active' if p.startswith('/customers') }}">Clients</a>
+    <a href="/messages" class="{{ 'active' if p.startswith('/messages') }}">Messages</a>
+    <a href="/fines" class="{{ 'active' if p.startswith('/fines') }}">Contraventions</a>
+    <a href="/invoices" class="{{ 'active' if p.startswith('/invoices') }}">Factures</a>
+    {% if user.role.value == 'owner' %}
+    <a href="/users" class="{{ 'active' if p.startswith('/users') }}">Utilisateurs</a>
+    <a href="/settings" class="{{ 'active' if p.startswith('/settings') }}">Paramètres</a>
+    {% endif %}
+  </nav>
+  <a href="/account" class="small">{{ user.full_name or user.email }}</a>
+  <form method="post" action="/logout" class="inline">{{ csrf }}<button class="secondary">Déconnexion</button></form>
+</div></header>
+{% endif %}
+<main class="{% block main_class %}{% endblock %}">
+  {% for f in flashes %}<div class="flash {{ f.category }}">{{ f.message }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

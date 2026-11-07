@@ -1,0 +1,21 @@
+<div class="fields">
+  <label>Civilité <select name="civility"><option {{ 'selected' if customer.civility=='M' }}>M</option><option {{ 'selected' if customer.civility=='Mme' }}>Mme</option></select></label>
+  <label>Prénom <input name="first_name" value="{{ customer.first_name or '' }}" {{ 'required' if renter }}></label>
+  <label>Nom <input name="last_name" value="{{ customer.last_name or '' }}" {{ 'required' if renter }}></label>
+</div>
+<label>Adresse <input name="address" value="{{ customer.address or '' }}" {{ 'required' if renter }}></label>
+<div class="fields">
+  <label>Code postal <input name="postal_code" value="{{ customer.postal_code or '' }}" {{ 'required' if renter }}></label>
+  <label>Ville <input name="city" value="{{ customer.city or '' }}" {{ 'required' if renter }}></label>
+  <label>Pays (code) <input name="country" value="{{ customer.country or 'FR' }}" maxlength="2"></label>
+</div>
+<div class="fields">
+  <label>Date de naissance <input type="date" name="birth_date" value="{{ customer.birth_date or '' }}" {{ 'required' if renter }}></label>
+  <label>Lieu de naissance <input name="birth_place" value="{{ customer.birth_place or '' }}" {{ 'required' if renter }}></label>
+</div>
+<div class="fields">
+  <label>N° de permis <input name="license_number" value="{{ customer.license_number or '' }}" {{ 'required' if renter }}></label>
+  <label>Date de délivrance <input type="date" name="license_issue_date" value="{{ customer.license_issue_date or '' }}" {{ 'required' if renter }}></label>
+  <label>Délivré par (préfecture) <input name="license_issue_place" value="{{ customer.license_issue_place or '' }}" {{ 'required' if renter }}></label>
+  <label>Catégorie <input name="license_category" value="{{ customer.license_category or 'B' }}"></label>
+</div>

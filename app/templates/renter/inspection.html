@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block main_class %}narrow{% endblock %}
+{% block title %}État des lieux{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data" class="card stack" id="insp">{{ csrf }}
+  <h1>État des lieux de {{ 'départ' if kind=='checkin' else 'retour' }}</h1>
+  <p class="small muted">{{ rental.vehicle.label }}{% if previous and kind=='checkout' %} — départ : {{ previous.mileage }} km, carburant {{ previous.fuel_level }}%{% endif %}</p>
+  <div class="fields">
+    <label>Kilométrage (compteur) <input type="number" name="mileage" inputmode="numeric" required min="{{ previous.mileage if previous and kind=='checkout' else 0 }}"></label>
+    <label>Carburant : <output id="fuelOut">50</output>%
+      <input type="range" name="fuel_level" min="0" max="100" step="5" value="50" oninput="fuelOut.value=this.value"></label>
+  </div>
+  <label>Propreté intérieure
+    <select name="cleanliness_score">{% for n in [5,4,3,2,1] %}<option value="{{ n }}">{{ n }}/5</option>{% endfor %}</select></label>
+  <label>Problèmes de propreté <input name="cleanliness_issues" placeholder="Aucun"></label>
+  <label>Dommages constatés (rayures, chocs…) <textarea name="damages" placeholder="Aucun"></textarea></label>
+  <h2>Photos obligatoires</h2>
+  {% for a in angles %}
+  <label class="photo-input">📷 {{ a }}<input type="file" name="photo_{{ loop.index0 }}" accept="image/*" capture="environment" required></label>
+  {% endfor %}
+  <label class="photo-input">Photos supplémentaires (dommages, détails)<input type="file" name="extra_photos" accept="image/*" multiple></label>
+  <label>Remarques <textarea name="notes"></textarea></label>
+  <button class="big" id="submitBtn">Valider l'état des lieux</button>
+  <a href="/r/home" class="small">← Retour</a>
+</form>
+<script>
+  document.getElementById('insp').addEventListener('submit', () => {
+    const b = document.getElementById('submitBtn'); b.disabled = true; b.textContent = 'Envoi des photos…';
+  });
+</script>
+{% endblock %}

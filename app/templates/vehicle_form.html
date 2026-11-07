@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ 'Véhicule ' ~ vehicle.plate if vehicle.id else 'Nouveau véhicule' }}</h1>
+<form method="post" class="card stack">{{ csrf }}
+  <div class="fields">
+    <label>Immatriculation <input name="plate" value="{{ vehicle.plate or '' }}" required placeholder="AB-123-CD"></label>
+    <label>Marque <input name="brand" value="{{ vehicle.brand or '' }}"></label>
+    <label>Modèle <input name="model" value="{{ vehicle.model or '' }}"></label>
+    <label>Carburant <select name="fuel_type">{% for f in ['Diesel','Essence','Électrique','Hybride','GPL'] %}<option {{ 'selected' if vehicle.fuel_type==f }}>{{ f }}</option>{% endfor %}</select></label>
+    <label>N° VIN <input name="vin" value="{{ vehicle.vin or '' }}"></label>
+    <label>Kilométrage actuel <input type="number" name="current_mileage" value="{{ vehicle.current_mileage or 0 }}"></label>
+  </div>
+  <label>Adresse de stationnement (prise et retour) <input name="parking_address" value="{{ vehicle.parking_address or '' }}"></label>
+  <div class="fields">
+    <label>Code de la boîte à clés (Masterlock) <input name="masterlock_code" value="{{ vehicle.masterlock_code or '' }}" autocomplete="off"></label>
+    <label>ID véhicule Getaround <input name="getaround_car_id" value="{{ vehicle.getaround_car_id or '' }}" placeholder="rempli auto. via la plaque"></label>
+  </div>
+  <h2>Tarifs des locations directes (TTC)</h2>
+  <div class="fields">
+    <label>Prix / jour (€) <input type="number" step="0.01" name="daily_price" value="{{ vehicle.daily_price }}"></label>
+    <label>Km inclus / jour <input type="number" name="included_km_per_day" value="{{ vehicle.included_km_per_day }}"></label>
+    <label>Prix du km sup. (€) <input type="number" step="0.01" name="extra_km_price" value="{{ vehicle.extra_km_price }}"></label>
+    <label>Dépôt de garantie (€) <input type="number" step="0.01" name="deposit_amount" value="{{ vehicle.deposit_amount }}"></label>
+  </div>
+  <label class="check"><input type="checkbox" name="active" {{ 'checked' if vehicle.active or not vehicle.id }}> Véhicule actif</label>
+  <div><button>Enregistrer</button> <a href="/vehicles" class="btn secondary">Annuler</a></div>
+</form>
+{% endblock %}

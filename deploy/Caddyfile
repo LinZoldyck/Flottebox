@@ -1,0 +1,8 @@
+# Remplacez par votre nom de domaine (enregistrement DNS A/AAAA vers votre box)
+flotte.mondomaine.fr {
+    encode gzip
+    request_body {
+        max_size 120MB
+    }
+    reverse_proxy app:8000
+}

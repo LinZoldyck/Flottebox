@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row spread"><h1>Clients</h1>{% if user.role.value != 'viewer' %}<a class="btn" href="/customers/new">+ Ajouter</a>{% endif %}</div>
+<div class="card table-wrap"><table>
+  <tr><th>Client</th><th>Téléphone</th><th>E-mail</th><th>Origine</th><th>Dossier conducteur</th></tr>
+  {% for c in customers %}<tr>
+    <td><a href="/customers/{{ c.id }}">{{ c.display_name }}</a></td><td>{{ c.phone }}</td><td>{{ c.email }}</td>
+    <td>{{ 'Getaround' if c.getaround_user_id else 'Direct' }}</td>
+    <td>{% if c.missing_designation_fields %}<span class="badge warn">{{ c.missing_designation_fields|length }} champ(s) manquant(s)</span>{% else %}<span class="badge ok">Complet</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">Aucun client.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

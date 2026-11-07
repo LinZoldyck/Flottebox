@@ -28,14 +28,33 @@ Avec `SMS_PROVIDER=console`, les SMS s'affichent dans les logs du serveur, ce qu
 
 ## Déploiement sur Raspberry Pi (recommandé)
 
-Il faut un Raspberry Pi 4 ou 5 avec un OS 64 bits et Docker installé (`curl -fsSL https://get.docker.com | sh`).
+Il faut un Raspberry Pi 4 ou 5 (2 Go de RAM minimum) avec **Raspberry Pi OS 64 bits**.
 
+**1. Installer Docker sur le Pi** (une seule fois) :
+```bash
+curl -fsSL https://get.docker.com | sudo sh     # installe Docker Engine + le plugin « docker compose »
+sudo usermod -aG docker $USER                    # utiliser docker sans sudo…
+newgrp docker                                    # …tout de suite (ou déconnectez-vous / reconnectez-vous)
+docker run --rm hello-world                      # vérification
+```
+Le démon Docker démarre automatiquement au boot (service systemd `docker`).
+
+**2. Installer l'application** :
 ```bash
 git clone https://github.com/LinZoldyck/testrespo.git flottebox && cd flottebox
 cp .env.example .env && nano .env              # SECRET_KEY, BASE_URL, SMS, ANTHROPIC_API_KEY…
-docker compose up -d --build                    # application sur http://<ip-du-pi>:8000
-docker compose exec app python -m app.cli create-owner --company "Ma Société" --email moi@exemple.fr --name "Prénom Nom"
+docker compose up -d --build                    # construit l'image sur le Pi (≈ 5 min la 1re fois)
+docker compose exec -u flotte app python -m app.cli create-owner --company "Ma Société" --email moi@exemple.fr --name "Prénom Nom"
 ```
+L'application répond sur `http://<ip-du-pi>:8000`. Le conteneur redémarre tout seul après une coupure ou un reboot.
+
+Commandes utiles :
+```bash
+docker compose logs -f app                       # journaux (dont les SMS en mode « console »)
+git pull && docker compose up -d --build         # mise à jour
+docker compose exec -u flotte app python -m app.cli scan-fines
+```
+Lancez toujours les commandes `exec` avec `-u flotte`, sinon les fichiers créés appartiendront à root.
 
 L'application doit être joignable **en HTTPS depuis Internet**. C'est nécessaire pour trois raisons : les locataires ouvrent le lien du SMS sur leur téléphone, Getaround envoie ses webhooks, et l'appareil photo du navigateur l'exige. Deux options :
 

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Paramètres</h1>
+<form method="post" enctype="multipart/form-data" class="stack">{{ csrf }}
+<div class="card stack">
+  <h2>Société (en-tête du contrat et désignations)</h2>
+  <div class="fields">
+    <label>Nom <input name="name" value="{{ org.name }}" required></label>
+    <label>Forme juridique <input name="legal_form" value="{{ org.legal_form }}" placeholder="SAS"></label>
+    <label>SIRET <input name="siret" value="{{ org.siret }}"></label>
+    <label>N° TVA <input name="vat_number" value="{{ org.vat_number }}"></label>
+  </div>
+  <label>Adresse <input name="address" value="{{ org.address }}"></label>
+  <div class="fields">
+    <label>Code postal <input name="postal_code" value="{{ org.postal_code }}"></label>
+    <label>Ville <input name="city" value="{{ org.city }}"></label>
+    <label>Téléphone <input name="phone" value="{{ org.phone }}"></label>
+    <label>E-mail <input name="email" value="{{ org.email }}"></label>
+    <label>Représentant légal <input name="representative_name" value="{{ org.representative_name }}"></label>
+  </div>
+  <div class="row">{% if org.logo_path %}<img src="/files/{{ org.logo_path }}" alt="logo" style="height:48px">{% endif %}
+    <label>Logo (PNG/JPG) <input type="file" name="logo" accept="image/*"></label></div>
+</div>
+<div class="card stack">
+  <h2>Conditions générales du contrat</h2>
+  <textarea name="contract_terms" rows="10" placeholder="Laisser vide pour utiliser le modèle par défaut">{{ org.contract_terms }}</textarea>
+  <details><summary class="small">Voir le modèle par défaut</summary><pre style="white-space:pre-wrap">{{ default_terms }}</pre></details>
+</div>
+<div class="card stack">
+  <h2>Assistant de messagerie (Claude)</h2>
+  {% if not claude_ready %}<div class="flash error">Clé ANTHROPIC_API_KEY absente du fichier .env : tous les messages vous seront transmis.</div>{% endif %}
+  <label>Mode
+    <select name="assistant_mode">
+      <option value="off" {{ 'selected' if org.assistant_mode=='off' }}>Désactivé</option>
+      <option value="draft" {{ 'selected' if org.assistant_mode=='draft' }}>Brouillon : je valide chaque réponse (recommandé au début)</option>
+      <option value="auto" {{ 'selected' if org.assistant_mode=='auto' }}>Automatique : réponses simples envoyées seules</option>
+    </select></label>
+  <label>Base de connaissances (adresse, accès, consignes, FAQ…)
+    <textarea name="assistant_knowledge" rows="8" placeholder="Le véhicule est garé au 12 rue ... Les clés sont dans ... Le plein doit être rendu au même niveau ...">{{ org.assistant_knowledge }}</textarea></label>
+</div>
+<div class="card stack">
+  <h2>Intégrations</h2>
+  <p class="small muted">Les champs secrets ne sont jamais réaffichés ; laissez vide pour conserver la valeur actuelle.</p>
+  <div class="fields">
+    <label>Jeton API Getaround {% if org.getaround_token %}<span class="badge ok">configuré</span>{% endif %}<input type="password" name="getaround_token" autocomplete="off"></label>
+    <label>Secret webhook Getaround {% if org.getaround_webhook_secret %}<span class="badge ok">configuré</span>{% endif %}<input type="password" name="getaround_webhook_secret" autocomplete="off"></label>
+    <label>Jeton API Pennylane {% if org.pennylane_token %}<span class="badge ok">configuré</span>{% endif %}<input type="password" name="pennylane_token" autocomplete="off"></label>
+    <label>Taux de TVA Pennylane <input name="invoice_vat_rate" value="{{ org.invoice_vat_rate }}"></label>
+  </div>
+  <p class="small">URL de webhook à communiquer à Getaround : <code>{{ webhook_url }}</code></p>
+</div>
+<div><button class="big">Enregistrer</button></div>
+</form>
+<div class="card" id="robot">
+  <h2>Jeton du robot de désignation</h2>
+  {% if new_token %}<div class="flash success">Copiez ce jeton maintenant, il ne sera plus affiché :<br><code>{{ new_token }}</code></div>{% endif %}
+  <p class="small">Le robot (sur votre ordinateur) l'utilise pour récupérer les données de désignation. {% if org.api_token_hash %}<span class="badge ok">un jeton existe</span>{% endif %}</p>
+  <form method="post" action="/settings/api-token">{{ csrf }}<button class="secondary">Générer un nouveau jeton</button></form>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+# Installation sans Docker (systemd) — voir README, section « Sans Docker »
+[Unit]
+Description=FlotteBox
+After=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/flottebox
+EnvironmentFile=/home/pi/flottebox/.env
+ExecStart=/home/pi/flottebox/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

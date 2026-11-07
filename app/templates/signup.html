@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block main_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Créer mon espace</h1>
+  <form method="post" action="/signup" class="stack">{{ csrf }}
+    <label>Nom de la société <input name="company" required></label>
+    <label>Votre nom <input name="full_name" required></label>
+    <label>E-mail <input type="email" name="email" required></label>
+    <label>Mot de passe (10 caractères min.) <input type="password" name="password" minlength="10" required></label>
+    <button class="big">Créer le compte</button>
+  </form>
+  <p class="small"><a href="/login">J'ai déjà un compte</a></p>
+</div>
+{% endblock %}

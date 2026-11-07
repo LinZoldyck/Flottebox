@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row spread"><h1>Contravention {{ fine.notice_number or ('#' ~ fine.id) }}</h1>
+  <a class="btn secondary" href="/files/{{ fine.file_path }}" target="_blank">Voir l'avis</a></div>
+<div class="grid">
+  <form method="post" class="card stack">{{ csrf }}
+    <h2>Informations extraites <span class="badge">{{ fine.extraction_method or 'manuel' }}</span></h2>
+    <div class="fields">
+      <label>N° d'avis <input name="notice_number" value="{{ fine.notice_number }}"></label>
+      <label>Immatriculation <input name="plate" value="{{ fine.plate }}"></label>
+      <label>Date et heure <input type="datetime-local" name="offense_at" value="{{ fine.offense_at.strftime('%Y-%m-%dT%H:%M') if fine.offense_at }}"></label>
+      <label>Montant (€) <input name="amount" value="{{ fine.amount if fine.amount is not none }}"></label>
+      <label>Date limite <input type="date" name="designation_deadline" value="{{ fine.designation_deadline or '' }}"></label>
+    </div>
+    <label>Lieu <input name="location" value="{{ fine.location }}"></label>
+    <label>Infraction <input name="offense_type" value="{{ fine.offense_type }}"></label>
+    <label>Location
+      <select name="rental_id">
+        <option value="auto">Rapprochement automatique</option>
+        {% for r in candidates %}<option value="{{ r.id }}" {{ 'selected' if r.id == fine.rental_id }}>{{ r.reference }} — {{ r.starts_at|dt }} → {{ r.ends_at|dt }} — {{ r.customer.display_name if r.customer else '?' }}</option>{% endfor %}
+      </select></label>
+    {% if user.role.value != 'viewer' %}<div><button>Enregistrer et rapprocher</button></div>{% endif %}
+  </form>
+  <div class="card">
+    <h2>Résultat</h2>
+    <p><span class="badge">{{ fine.status.label }}</span> {{ fine.match_note }}</p>
+    {% if fine.rental %}<p><a href="/rentals/{{ fine.rental.id }}">Voir la location {{ fine.rental.reference }}</a></p>{% endif %}
+    {% if designation.manquants %}<div class="flash error">Informations manquantes pour désigner : {{ designation.manquants|join(', ') }}</div>{% endif %}
+    <h2 id="robot">Désignation du conducteur (ANTAI)</h2>
+    <p class="small">Lancez le robot sur votre ordinateur : il ouvre le site de l'ANTAI et remplit chaque étape. Vous gardez la main sur le captcha et la validation finale.</p>
+    <pre>python robot/antai_designation.py --fine {{ fine.id }}</pre>
+    <details><summary class="small">Données transmises au robot</summary><pre>{{ designation|tojson(indent=2) }}</pre></details>
+    {% if user.role.value != 'viewer' %}
+    <form method="post" action="/fines/{{ fine.id }}/status" class="row">{{ csrf }}
+      <select name="status" style="width:auto">{% for s in fine.status.__class__ %}<option value="{{ s.value }}" {{ 'selected' if s==fine.status }}>{{ s.label }}</option>{% endfor %}</select>
+      <button class="secondary">Mettre à jour</button></form>{% endif %}
+  </div>
+</div>
+{% endblock %}

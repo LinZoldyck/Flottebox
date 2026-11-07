@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Contraventions</h1>
+{% if user.role.value != 'viewer' %}
+<div class="grid">
+  <div class="card">
+    <h2>Déposer des avis</h2>
+    <form method="post" action="/fines/upload" enctype="multipart/form-data" class="stack">{{ csrf }}
+      <input type="file" name="files" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" required>
+      <button>Importer et analyser</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Dossier de dépôt</h2>
+    <p class="small">Vous pouvez aussi déposer les fichiers dans le dossier <code>{{ inbox }}</code> du serveur (partage réseau, Syncthing, scanner…). Il est analysé toutes les 5 minutes.</p>
+    <form method="post" action="/fines/scan">{{ csrf }}<button class="secondary">Analyser le dossier maintenant</button></form>
+  </div>
+</div>
+{% endif %}
+<div class="card table-wrap"><table>
+  <tr><th>Avis</th><th>Plaque</th><th>Date infraction</th><th>Lieu</th><th>Location / conducteur</th><th>Limite</th><th>Statut</th></tr>
+  {% for f in fines %}<tr>
+    <td><a href="/fines/{{ f.id }}">{{ f.notice_number or ('#' ~ f.id) }}</a><br><span class="small muted">{{ f.original_name }}</span></td>
+    <td>{{ f.plate or '?' }}</td><td>{{ f.offense_at|dt }}</td><td class="small">{{ f.location }}</td>
+    <td class="small">{{ f.match_note }}</td><td>{{ f.designation_deadline|d }}</td>
+    <td><span class="badge {{ 'ok' if f.status.value in ['matched','designated'] else 'err' if f.status.value=='unmatched' }}">{{ f.status.label }}</span></td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Aucune contravention.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

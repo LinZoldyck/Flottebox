@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Nouvelle location directe</h1>
+{% if not vehicles %}<div class="flash error">Ajoutez d'abord un véhicule.</div>{% endif %}
+<form method="post" class="card stack">{{ csrf }}
+  <div class="fields">
+    <label>Véhicule <select name="vehicle_id" required>{% for v in vehicles %}<option value="{{ v.id }}">{{ v.label }} — {{ v.daily_price|euros }}/j</option>{% endfor %}</select></label>
+    <label>Client <select name="customer_id" required>{% for c in customers %}<option value="{{ c.id }}">{{ c.display_name }}</option>{% endfor %}</select>
+      <a class="small" href="/customers/new?next=/rentals/new">+ nouveau client</a></label>
+  </div>
+  <div class="fields">
+    <label>Début <input type="datetime-local" name="starts_at" value="{{ start.strftime('%Y-%m-%dT%H:%M') }}" required></label>
+    <label>Fin <input type="datetime-local" name="ends_at" value="{{ end.strftime('%Y-%m-%dT%H:%M') }}" required></label>
+  </div>
+  <p class="small muted">Laissez vide pour appliquer le tarif du véhicule (prix/jour × nombre de jours, km inclus/jour).</p>
+  <div class="fields">
+    <label>Prix total TTC (€) <input type="number" step="0.01" name="price_total" placeholder="auto"></label>
+    <label>Km inclus <input type="number" name="included_km" placeholder="auto"></label>
+    <label>Prix km sup. (€) <input type="number" step="0.01" name="extra_km_price" placeholder="auto"></label>
+    <label>Dépôt de garantie (€) <input type="number" step="0.01" name="deposit_amount" placeholder="auto"></label>
+  </div>
+  <label>Protection / assurance <input name="protection" placeholder="ex. Assurance tous risques, franchise 1 000 €"></label>
+  <label>Notes internes <textarea name="notes"></textarea></label>
+  <div><button>Créer la location</button></div>
+</form>
+{% endblock %}

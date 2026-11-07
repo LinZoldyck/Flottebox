@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row spread"><h1>Véhicules</h1>{% if user.role.value != 'viewer' %}<a class="btn" href="/vehicles/new">+ Ajouter</a>{% endif %}</div>
+<div class="card table-wrap"><table>
+  <tr><th>Plaque</th><th>Modèle</th><th>Kilométrage</th><th>Tarif / jour</th><th>Getaround</th><th>Boîte à clés</th><th>Actif</th></tr>
+  {% for v in vehicles %}<tr>
+    <td><a href="/vehicles/{{ v.id }}">{{ v.plate }}</a></td><td>{{ v.brand }} {{ v.model }}</td>
+    <td>{{ v.current_mileage }} km</td><td>{{ v.daily_price|euros }}</td>
+    <td>{{ v.getaround_car_id or '-' }}</td><td>{{ '✔' if v.masterlock_code else '—' }}</td><td>{{ 'Oui' if v.active else 'Non' }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Ajoutez votre premier véhicule.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

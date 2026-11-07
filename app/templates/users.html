@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Utilisateurs et rôles</h1>
+<div class="card table-wrap"><table>
+  <tr><th>E-mail</th><th>Nom</th><th>Rôle</th><th>Actif</th><th>Dernière connexion</th><th></th></tr>
+  {% for u in users %}<tr>
+    <form method="post" action="/users/{{ u.id }}">{{ csrf }}
+    <td>{{ u.email }}</td><td>{{ u.full_name }}</td>
+    <td><select name="role" {{ 'disabled' if u.id == user.id }}>{% for r in roles %}<option value="{{ r.value }}" {{ 'selected' if r == u.role }}>{{ r.label }}</option>{% endfor %}</select></td>
+    <td><input type="checkbox" name="is_active" {{ 'checked' if u.is_active }} {{ 'disabled' if u.id == user.id }}></td>
+    <td class="small">{{ u.last_login_at|dt }}</td>
+    <td>{% if u.id != user.id %}<button class="secondary">Enregistrer</button>{% endif %}</td>
+    </form>
+  </tr>{% endfor %}
+</table></div>
+<div class="card">
+  <h2>Ajouter un utilisateur</h2>
+  <form method="post" action="/users" class="stack">{{ csrf }}
+    <div class="fields">
+      <label>E-mail <input type="email" name="email" required></label>
+      <label>Nom <input name="full_name"></label>
+      <label>Rôle <select name="role">{% for r in roles %}<option value="{{ r.value }}" {{ 'selected' if r.value=='manager' }}>{{ r.label }}</option>{% endfor %}</select></label>
+      <label>Mot de passe provisoire <input type="password" name="password" minlength="10" required></label>
+    </div>
+    <div><button>Créer</button></div>
+  </form>
+  <p class="small muted"><b>Gérant</b> : tout, y compris utilisateurs et intégrations. <b>Gestionnaire</b> : véhicules, locations, contraventions, messages, factures. <b>Lecture seule</b> : consultation.</p>
+</div>
+{% endblock %}

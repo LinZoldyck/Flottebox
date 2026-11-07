@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% block main_class %}narrow{% endblock %}
+{% block title %}Location {{ rental.reference }}{% endblock %}
+{% block content %}
+{% set identity_ok = not missing %}
+{% set accepted = rental.terms_accepted_at %}
+<div class="card">
+  <div class="row spread"><b>{{ org.name }}</b><form method="post" action="/r/logout" class="inline">{{ csrf }}<button class="secondary">Quitter</button></form></div>
+  <h1 style="margin-top:8px">{{ rental.vehicle.brand }} {{ rental.vehicle.model }} · {{ rental.vehicle.plate }}</h1>
+  <p class="small">Du {{ rental.starts_at|dt }} au {{ rental.ends_at|dt }}<br>📍 {{ rental.vehicle.parking_address }}</p>
+  <ol class="steps">
+    <li class="{{ 'done' if identity_ok }}"><span class="dot">1</span> Mes informations conducteur</li>
+    <li class="{{ 'done' if accepted }}"><span class="dot">2</span> Acceptation du contrat</li>
+    <li class="{{ 'done' if checkin }}"><span class="dot">3</span> Clés + état des lieux de départ</li>
+    <li class="{{ 'done' if checkout }}"><span class="dot">4</span> État des lieux de retour + clés</li>
+  </ol>
+</div>
+
+{% if not identity_ok %}
+<form method="post" action="/r/identity" class="card stack">{{ csrf }}
+  <h2>1. Mes informations conducteur</h2>
+  <p class="small muted">Obligatoires pour le contrat de location.</p>
+  {% set customer = rental.customer %}{% set renter = True %}{% include "_customer_fields.html" %}
+  <button class="big">Continuer</button>
+</form>
+{% elif not accepted %}
+<form method="post" action="/r/accept" class="card stack">{{ csrf }}
+  <h2>2. Contrat de location</h2>
+  <p class="small">Prix : {{ rental.price_total|euros }} · {{ rental.included_km }} km inclus · km sup. {{ rental.extra_km_price|euros }} · dépôt de garantie {{ rental.deposit_amount|euros }}</p>
+  <details><summary>Lire les conditions générales</summary><pre style="white-space:pre-wrap">{{ terms }}</pre></details>
+  <label class="check"><input type="checkbox" name="agree" required> J'ai lu et j'accepte le contrat et les conditions générales.</label>
+  <label>Nom et prénom (vaut signature) <input name="full_name" required value="{{ rental.customer.driver_name if rental.customer }}"></label>
+  <button class="big">J'accepte</button>
+</form>
+{% elif not checkin %}
+<div class="card">
+  <h2>3. Récupérer les clés</h2>
+  <p>Code de la boîte à clés accrochée au véhicule :</p>
+  <div class="code-box">{{ rental.vehicle.masterlock_code or '—' }}</div>
+  <p class="small muted">Refermez la boîte après avoir pris les clés. Faites ensuite l'état des lieux avant de démarrer.</p>
+  <a class="btn big" href="/r/inspection/checkin">Faire l'état des lieux de départ</a>
+</div>
+{% elif not checkout %}
+<div class="card">
+  <h2>Bonne route ! 🚐</h2>
+  <p class="small">Départ enregistré le {{ checkin.done_at|dt }} — {{ checkin.mileage }} km — carburant {{ checkin.fuel_level|fuel }}.</p>
+  <p>À la fin de votre location : garez le véhicule à l'adresse indiquée, faites l'état des lieux de retour puis remettez les clés dans la boîte.</p>
+  <a class="btn big" href="/r/inspection/checkout">Faire l'état des lieux de retour</a>
+</div>
+{% else %}
+<div class="card">
+  <h2>4. Rendre les clés</h2>
+  <p>Remettez les clés dans la boîte et refermez-la :</p>
+  <div class="code-box">{{ rental.vehicle.masterlock_code or '—' }}</div>
+  <p>Merci ! Distance parcourue : <b>{{ rental.distance_km }} km</b>{% if rental.extra_km %} (dont {{ rental.extra_km }} km au-delà du forfait){% endif %}.</p>
+</div>
+{% endif %}
+{% if accepted %}<p><a class="btn secondary big" href="/r/contract.pdf">📄 Télécharger mon contrat</a></p>{% endif %}
+<p class="small muted">Un problème ? Appelez le {{ org.phone }}.</p>
+{% endblock %}

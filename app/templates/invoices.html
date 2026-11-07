@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Factures</h1>
+<div class="card table-wrap"><table>
+  <tr><th>#</th><th>Location</th><th>Client</th><th>Total TTC</th><th>Statut</th><th>Pennylane</th><th>Date</th></tr>
+  {% for i in invoices %}<tr>
+    <td>{{ i.id }}</td><td><a href="/rentals/{{ i.rental_id }}">{{ i.rental.reference }}</a></td>
+    <td>{{ i.rental.customer.display_name if i.rental.customer else '-' }}</td><td>{{ i.total_ttc|euros }}</td>
+    <td><span class="badge {{ 'ok' if i.status=='sent' else 'err' if i.status=='error' }}">{{ i.status }}</span> <span class="small">{{ i.error[:120] }}</span></td>
+    <td>{% if i.pennylane_url %}<a href="{{ i.pennylane_url }}" target="_blank" rel="noopener">PDF</a>{% else %}{{ i.pennylane_id or '-' }}{% endif %}</td>
+    <td>{{ i.created_at|dt }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Aucune facture. Elles se créent depuis la fiche d'une location terminée.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

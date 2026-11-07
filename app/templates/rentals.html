@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row spread"><h1>Locations</h1>
+  <div class="row">
+    {% if user.role.value != 'viewer' %}<form method="post" action="/getaround/sync" class="inline">{{ csrf }}<button class="secondary">↻ Synchroniser Getaround</button></form>
+    <a class="btn" href="/rentals/new">+ Location directe</a>{% endif %}
+  </div>
+</div>
+<p class="row small"><a href="/rentals">Toutes</a> · <a href="/rentals?source=direct">Directes</a> · <a href="/rentals?source=getaround">Getaround</a></p>
+<div class="card table-wrap"><table>
+  <tr><th>Réf.</th><th>Source</th><th>Véhicule</th><th>Client</th><th>Début</th><th>Fin</th><th>Prix</th><th>Statut</th></tr>
+  {% for r in rentals %}<tr>
+    <td><a href="/rentals/{{ r.id }}">{{ r.reference }}</a></td>
+    <td><span class="badge {{ 'warn' if r.source.value=='getaround' }}">{{ 'Getaround' if r.source.value=='getaround' else 'Directe' }}</span></td>
+    <td>{{ r.vehicle.plate }}</td><td>{{ r.customer.display_name if r.customer else '-' }}</td>
+    <td>{{ r.starts_at|dt }}</td><td>{{ r.ends_at|dt }}</td><td>{{ r.price_total|euros }}</td><td>{{ r.status.label }}</td></tr>
+  {% else %}<tr><td colspan="8" class="muted">Aucune location.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

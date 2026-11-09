@@ -1,6 +1,6 @@
 import re
 import secrets
-from datetime import datetime
+from datetime import date, datetime
 
 _PLATE_RE = re.compile(r"\b([A-Z]{2})[\s-]?(\d{3})[\s-]?([A-Z]{2})\b")
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sans 0/O/1/I
@@ -59,3 +59,15 @@ def euros(value: float | None) -> str:
     if value is None:
         return "-"
     return f"{value:,.2f} €".replace(",", " ").replace(".", ",")
+
+
+def add_months(d: date, months: int) -> date:
+    """Ajoute des mois en ramenant au dernier jour valide (31/01 + 1 mois -> 28 ou 29/02)."""
+    month0 = d.month - 1 + months
+    year, month = d.year + month0 // 12, month0 % 12 + 1
+    for day in (d.day, 30, 29, 28):
+        try:
+            return date(year, month, day)
+        except ValueError:
+            continue
+    return d

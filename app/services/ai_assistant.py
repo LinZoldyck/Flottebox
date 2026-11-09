@@ -40,7 +40,10 @@ class AssistantDecision(BaseModel):
 class FineExtraction(BaseModel):
     is_fps: bool = Field(description="true si c'est un avis de paiement de forfait post-stationnement (FPS), "
                                      "false si c'est un avis de contravention (amende)")
-    notice_number: str = Field(description="Numéro de l'avis de contravention (vide si absent)")
+    notice_number: str = Field(description="Numéro de l'avis (contravention ou avis de paiement FPS), en gardant "
+                                           "les espaces entre les groupes de chiffres tels qu'imprimés ; vide si absent")
+    payment_key: str = Field(description="Clé de contrôle imprimée à côté du numéro d'avis (souvent « Clé 73 »), vide si absente")
+    notice_sent_date: str = Field(description="Date d'envoi de l'avis AAAA-MM-JJ, vide si absente")
     plate: str = Field(description="Immatriculation du véhicule, format AB-123-CD")
     offense_date: str = Field(description="Date de l'infraction au format AAAA-MM-JJ")
     offense_time: str = Field(description="Heure de l'infraction au format HH:MM (24h)")

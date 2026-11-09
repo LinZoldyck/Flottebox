@@ -16,7 +16,7 @@ from app.config import get_settings
 from app.models import Fine, FineStatus, Organization, Rental, RentalStatus, Vehicle
 from app.services import ai_assistant
 from app.services.storage import save_file
-from app.utils import find_plate, normalize_plate
+from app.utils import add_months, find_plate, normalize_plate
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ _NOTICE_RE = re.compile(r"(?:n°\s*d'avis|num[ée]ro de l'avis(?: de (?:contrave
 _LOCATION_RE = re.compile(r"(?:lieu(?: de l'infraction)?|localisation)\s*:?\s*(.+)(?:\n\s*(\d{5}\s+[^\n]+))?", re.I)
 _AMOUNT_RE = re.compile(r"(?:montant[^\n]{0,60}?|amende[^\n]{0,40}?)(\d{1,4}(?:[,.]\d{2})?)\s*(?:€|euros?\b|eur\b)", re.I)
 _FPS_RE = re.compile(r"post[\s-]?stationnement|\bFPS\b", re.I)
+_KEY_RE = re.compile(r"\bcl[ée]\s*:?\s*(\d{2})\b", re.I)
 _SENT_RE = re.compile(r"date d'envoi[^\d]{0,40}(\d{2})/(\d{2})/(\d{4})", re.I)
 _DEADLINE_RE = re.compile(r"(?:avant le|au plus tard le|date limite[^\d]{0,20})\s*(\d{2})/(\d{2})/(\d{4})", re.I)
 _OFFENSE_RE = re.compile(r"(?:nature de l'infraction|infraction)\s*:?\s*(.+)", re.I)
@@ -57,6 +58,10 @@ def parse_fine_text(text: str) -> dict:
     m = _NOTICE_RE.search(text)
     if m:
         out["notice_number"] = m.group(1).replace(" ", "")
+        out["notice_display"] = " ".join(m.group(1).split())
+        k = _KEY_RE.search(text, m.end(), m.end() + 30)
+        if k:
+            out["payment_key"] = k.group(1)
     m = _LOCATION_RE.search(text)
     if m:
         out["location"] = " ".join(x.strip() for x in m.groups() if x)[:300]
@@ -74,23 +79,16 @@ def parse_fine_text(text: str) -> dict:
         except ValueError:
             pass
     m = _SENT_RE.search(text)
-    if m and out["kind"] == "fps" and "designation_deadline" not in out:
+    if m:
         dd, mm, yyyy = (int(x) for x in m.groups())
-        try:  # RAPO possible pendant 1 mois après l'envoi de l'avis de paiement
-            out["designation_deadline"] = add_one_month(date(yyyy, mm, dd))
+        try:
+            out["notice_sent_date"] = date(yyyy, mm, dd)
         except ValueError:
             pass
+    if out["kind"] == "fps" and out.get("notice_sent_date") and "designation_deadline" not in out:
+        # RAPO possible pendant 1 mois après l'envoi de l'avis de paiement
+        out["designation_deadline"] = add_months(out["notice_sent_date"], 1)
     return out
-
-
-def add_one_month(d: date) -> date:
-    year, month = (d.year + 1, 1) if d.month == 12 else (d.year, d.month + 1)
-    for day in (d.day, 30, 29, 28):
-        try:
-            return date(year, month, day)
-        except ValueError:
-            continue
-    return d
 
 
 def analyse(fine: Fine, data: bytes, media_type: str) -> None:
@@ -115,6 +113,9 @@ def analyse(fine: Fine, data: bytes, media_type: str) -> None:
                 "offense_type": ai.offense_type or fields.get("offense_type", ""),
                 "amount": ai.amount if ai.amount is not None else fields.get("amount"),
                 "designation_deadline": _parse_iso_date(ai.designation_deadline) or fields.get("designation_deadline"),
+                "notice_display": " ".join(ai.notice_number.split()) or fields.get("notice_display", ""),
+                "payment_key": re.sub(r"\D", "", ai.payment_key)[:4] or fields.get("payment_key", ""),
+                "notice_sent_date": _parse_iso_date(ai.notice_sent_date) or fields.get("notice_sent_date"),
             }
         elif not fine.extraction_method:
             fine.extraction_method = "manuel"

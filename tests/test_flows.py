@@ -373,6 +373,9 @@ def test_fps_parsing():
     assert out["location"] == "48 RUE DIDEROT 93500 PANTIN"
     assert out["amount"] == 35.0
     assert str(out["designation_deadline"]) == "2026-11-21"  # RAPO : 1 mois après l'envoi
+    assert out["payment_key"] == "73"
+    assert out["notice_display"] == "21930055500014 26 1 289 003 975"
+    assert str(out["notice_sent_date"]) == "2026-10-21"
     assert fines.parse_fine_text(FINE_TEXT)["kind"] == "contravention"
 
 
@@ -440,3 +443,48 @@ def test_add_missing_columns_migration(tmp_path):
     assert {"kind", "invoice_id", "plate"} <= cols
     with eng.connect() as conn:
         assert conn.execute(text("SELECT kind FROM fines")).scalar() == "contravention"
+
+
+def test_fps_payment_prefill(owner):
+    c = owner
+    db = SessionLocal()
+    org = db.scalar(select(Organization))
+    fps = Fine(organization_id=org.id, file_path="x")
+    for k, v in fines.parse_fine_text(FPS_TEXT).items():
+        setattr(fps, k, v)
+    amende = Fine(organization_id=org.id, file_path="y", kind="contravention", notice_number="123")
+    db.add_all([fps, amende])
+    db.commit()
+    assert fps.notice_segments == ["21930055500014", "26", "1", "289", "003", "975"]
+    assert str(fps.payment_deadline) == "2027-01-21"  # FPS majoré au-delà de 3 mois
+    fps_id, amende_id = fps.id, amende.id
+    # numéro saisi sans espaces : découpage selon le format FPS
+    fps.notice_display = ""
+    assert fps.notice_segments[0] == "21930055500014" and len(fps.notice_segments) == 6
+    db.close()
+
+    page = c.get(f"/fines/{fps_id}").text
+    assert "Payer ce FPS" in page and "robot/fps_payment.py --fine" in page and "<code>73</code>" in page
+
+    r = c.form("/settings", "/settings/api-token")
+    h = {"Authorization": "Bearer fb_" + r.text.split("<code>fb_")[1].split("</code>")[0]}
+    assert [f["id"] for f in c.get("/api/fines", params={"type": "fps"}, headers=h).json()] == [fps_id]
+    p = c.get(f"/api/fines/{fps_id}/payment", headers=h).json()
+    assert p["cle"] == "73" and p["montant"] == 35.0 and p["segments"][-1] == "975" and p["manquants"] == []
+    assert p["payer_avant"] == "21/01/2027"
+    assert c.get(f"/api/fines/{amende_id}/payment", headers=h).status_code == 409
+    assert c.post(f"/api/fines/{fps_id}/paid", headers=h).json() == {"ok": True}
+    assert c.get("/api/fines", params={"type": "fps"}, headers=h).json() == []
+    db = SessionLocal()
+    assert db.get(Fine, fps_id).paid_amount == 35.0
+    db.close()
+
+    # correction manuelle + annulation depuis l'interface
+    c.form(f"/fines/{fps_id}", f"/fines/{fps_id}", data={"kind": "fps", "notice_number": "1111 22",
+                                                           "payment_key": "Clé 05", "plate": "DS-301-FV"})
+    c.form(f"/fines/{fps_id}", f"/fines/{fps_id}/paid", data={"undo": "true"})
+    db = SessionLocal()
+    f = db.get(Fine, fps_id)
+    assert f.notice_number == "111122" and f.notice_segments == ["1111", "22"] and f.payment_key == "05"
+    assert f.paid_at is None
+    db.close()

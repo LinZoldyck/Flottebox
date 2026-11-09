@@ -63,17 +63,22 @@ def fine_detail(request: Request, fine_id: int, user: User = Depends(get_current
         candidates = db.scalars(select(Rental).where(Rental.vehicle_id == fine.vehicle_id)
                                 .order_by(Rental.starts_at.desc()).limit(30)).all()
     return render(request, "fine_detail.html", user=user, fine=fine, candidates=candidates,
-                  designation=designation_payload(db.get(Organization, user.organization_id), fine))
+                  designation=designation_payload(db.get(Organization, user.organization_id), fine),
+                  payment=payment_payload(fine), today=now_local().date())
 
 
 @router.post("/fines/{fine_id}")
 def fine_update(request: Request, fine_id: int, notice_number: str = Form(""), plate: str = Form(""),
                 offense_at: str = Form(""), location: str = Form(""), offense_type: str = Form(""),
                 amount: str = Form(""), designation_deadline: str = Form(""), rental_id: str = Form(""),
-                kind: str = Form("contravention"), user: User = Depends(manager), db: Session = Depends(get_db)):
+                kind: str = Form("contravention"), payment_key: str = Form(""), notice_sent_date: str = Form(""),
+                user: User = Depends(manager), db: Session = Depends(get_db)):
     fine = _get(db, Fine, fine_id, user)
     fine.kind = "fps" if kind == "fps" else "contravention"
-    fine.notice_number, fine.plate = notice_number.strip(), normalize_plate(plate)
+    fine.notice_display = " ".join(notice_number.split())
+    fine.notice_number, fine.plate = fine.notice_display.replace(" ", ""), normalize_plate(plate)
+    fine.payment_key = "".join(ch for ch in payment_key if ch.isdigit())[:4]
+    fine.notice_sent_date = date.fromisoformat(notice_sent_date) if notice_sent_date else None
     fine.offense_at = datetime.fromisoformat(offense_at) if offense_at else None
     fine.location, fine.offense_type = location.strip(), offense_type.strip()
     fine.amount = float(amount.replace(",", ".")) if amount.strip() else None
@@ -87,6 +92,41 @@ def fine_update(request: Request, fine_id: int, notice_number: str = Form(""), p
     db.commit()
     flash(request, "Contravention mise à jour.", "success")
     return RedirectResponse(f"/fines/{fine.id}", status_code=303)
+
+
+@router.post("/fines/{fine_id}/paid")
+def fine_paid(request: Request, fine_id: int, paid_amount: str = Form(""), paid_on: str = Form(""),
+              undo: bool = Form(False), user: User = Depends(manager), db: Session = Depends(get_db)):
+    fine = _get(db, Fine, fine_id, user)
+    if undo:
+        fine.paid_at, fine.paid_amount = None, None
+    else:
+        fine.paid_at = datetime.fromisoformat(paid_on) if paid_on else now_local()
+        try:
+            fine.paid_amount = float(paid_amount.replace(",", ".")) if paid_amount.strip() else fine.amount
+        except ValueError:
+            fine.paid_amount = fine.amount
+    db.commit()
+    flash(request, "Paiement annulé." if undo else "FPS marqué comme payé.", "success")
+    return RedirectResponse(f"/fines/{fine.id}", status_code=303)
+
+
+def payment_payload(fine: Fine) -> dict:
+    """Données de pré-remplissage du paiement d'un FPS (utilisées par la fiche et le robot de paiement)."""
+    return {
+        "fine_id": fine.id,
+        "numero_avis": fine.notice_number,
+        "numero_avis_imprime": fine.notice_display or fine.notice_number,
+        "segments": fine.notice_segments,
+        "cle": fine.payment_key,
+        "montant": fine.amount,
+        "immatriculation": fine.plate.replace("-", ""),
+        "date_stationnement": f"{fine.offense_at:%d/%m/%Y}" if fine.offense_at else "",
+        "date_envoi": f"{fine.notice_sent_date:%d/%m/%Y}" if fine.notice_sent_date else "",
+        "payer_avant": f"{fine.payment_deadline:%d/%m/%Y}" if fine.payment_deadline else "",
+        "manquants": [label for label, value in [("Numéro d'avis", fine.notice_number), ("Clé", fine.payment_key),
+                                                 ("Montant", fine.amount)] if not value],
+    }
 
 
 @router.post("/fines/{fine_id}/status")

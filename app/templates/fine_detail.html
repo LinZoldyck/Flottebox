@@ -11,7 +11,9 @@
         <option value="fps" {{ 'selected' if fine.is_fps }}>Forfait post-stationnement (FPS) — à payer puis refacturer</option>
       </select></label>
     <div class="fields">
-      <label>N° d'avis <input name="notice_number" value="{{ fine.notice_number }}"></label>
+      <label>N° d'avis <input name="notice_number" value="{{ fine.notice_display or fine.notice_number }}"></label>
+      <label>Clé (FPS) <input name="payment_key" value="{{ fine.payment_key }}" inputmode="numeric" maxlength="4"></label>
+      <label>Date d'envoi de l'avis <input type="date" name="notice_sent_date" value="{{ fine.notice_sent_date or '' }}"></label>
       <label>Immatriculation <input name="plate" value="{{ fine.plate }}"></label>
       <label>Date et heure <input type="datetime-local" name="offense_at" value="{{ fine.offense_at.strftime('%Y-%m-%dT%H:%M') if fine.offense_at }}"></label>
       <label>Montant (€) <input name="amount" value="{{ fine.amount if fine.amount is not none }}"></label>
@@ -31,11 +33,40 @@
     <p><span class="badge">{{ fine.status.label }}</span> {{ fine.match_note }}</p>
     {% if fine.rental %}<p><a href="/rentals/{{ fine.rental.id }}">Voir la location {{ fine.rental.reference }}</a></p>{% endif %}
     {% if fine.is_fps %}
+    <div class="card" style="background:var(--primary-soft)">
+      <h2>💳 Payer ce FPS</h2>
+      {% if fine.paid_at %}
+        <p><span class="badge ok">Payé</span> le {{ fine.paid_at|dt }} — {{ fine.paid_amount|euros }}</p>
+        {% if user.role.value != 'viewer' %}<form method="post" action="/fines/{{ fine.id }}/paid">{{ csrf }}<input type="hidden" name="undo" value="true"><button class="secondary">Annuler le paiement</button></form>{% endif %}
+      {% else %}
+        {% if payment.manquants %}<div class="flash error">À compléter avant de payer : {{ payment.manquants|join(', ') }}</div>{% endif %}
+        {% if fine.payment_deadline %}<p class="small">À payer avant le <b>{{ fine.payment_deadline|d }}</b>
+          {% if fine.payment_deadline < today %}<span class="badge err">délai dépassé : le FPS est peut-être majoré</span>{% endif %}
+          (au-delà, FPS majoré recouvré par l'ANTAI).</p>{% endif %}
+        <table class="small">
+          <tr><th>Numéro de l'avis de paiement</th><td>
+            {% for s in payment.segments %}<code style="border:1px solid var(--border);padding:2px 5px;border-radius:4px;margin-right:2px">{{ s }}</code>{% endfor %}
+            <button type="button" class="secondary" onclick="copy('{{ payment.numero_avis }}', this)">Copier</button></td></tr>
+          <tr><th>Clé</th><td><code>{{ payment.cle or '?' }}</code> {% if payment.cle %}<button type="button" class="secondary" onclick="copy('{{ payment.cle }}', this)">Copier</button>{% endif %}</td></tr>
+          <tr><th>Montant</th><td><b>{{ fine.amount|euros }}</b></td></tr>
+          <tr><th>Immatriculation</th><td>{{ fine.plate }}</td></tr>
+        </table>
+        <p class="small">Paiement sur le site officiel <a href="https://www.antai.gouv.fr/" target="_blank" rel="noopener">antai.gouv.fr</a> (rubrique paiement du FPS), ou par le robot de pré-remplissage depuis votre ordinateur — la carte bancaire est toujours saisie par vous :</p>
+        <pre>python robot/fps_payment.py --fine {{ fine.id }}</pre>
+        {% if user.role.value != 'viewer' %}
+        <form method="post" action="/fines/{{ fine.id }}/paid" class="row">{{ csrf }}
+          <label>Montant payé (€) <input name="paid_amount" value="{{ fine.amount if fine.amount is not none }}" style="width:110px"></label>
+          <label>Le <input type="datetime-local" name="paid_on"></label>
+          <button>Marquer comme payé</button>
+        </form>{% endif %}
+      {% endif %}
+    </div>
+    <script>function copy(v, b){navigator.clipboard.writeText(v).then(()=>{const t=b.textContent;b.textContent='Copié ✔';setTimeout(()=>b.textContent=t,1500)})}</script>
     <h2>Forfait post-stationnement : pas de désignation</h2>
     <p class="small">Depuis la réforme du stationnement payant (2018), le FPS est dû par le <b>titulaire du certificat
       d'immatriculation</b> : il ne peut pas être transféré au conducteur par une désignation ANTAI. La marche à suivre :</p>
     <ol class="small">
-      <li>Payer le FPS avant la date limite (ou former un RAPO auprès de la collectivité dans le mois s'il est contestable).</li>
+      <li>Payer le FPS (fiche ci-dessus) avant la date limite (ou former un RAPO auprès de la collectivité dans le mois s'il est contestable).</li>
       <li>Refacturer le montant au locataire, conformément à votre contrat de location.</li>
     </ol>
     {% if fine.rental and fine.rental.source.value == 'direct' %}

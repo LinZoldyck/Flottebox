@@ -35,9 +35,15 @@ def api(base: str, token: str) -> httpx.Client:
 
 
 def lookup(data: dict, dotted: str) -> str:
+    """'conducteur.nom', 'segments.0' -> valeur (chaîne vide si absente)."""
     cur: object = data
     for part in dotted.split("."):
-        cur = cur.get(part) if isinstance(cur, dict) else None
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            cur = None
     return "" if cur is None else str(cur)
 
 

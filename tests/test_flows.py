@@ -344,3 +344,99 @@ def test_pennylane_invoice_with_mock(owner):
 def test_utils():
     assert normalize_plate("ab 123 cd") == "AB-123-CD"
     assert normalize_plate("ER836AN") == "ER-836-AN"
+
+
+FPS_TEXT = """Avis de Paiement
+Forfait de post-stationnement (FPS)
+PANTIN
+Numéro de l'avis de paiement : 21930055500014 26 1 289 003 975 Clé 73
+Date d'envoi de l'avis de paiement : 21/10/2026
+Le véhicule dont le certificat d'immatriculation est à votre nom a stationné le 16/10/2026 sur le territoire de PANTIN
+Date et heure de constatation de l'absence ou de l'insuffisance de paiement immédiat de la redevance :
+Le 16/10/2026 à 10h33
+Lieu :
+48 RUE DIDEROT
+93500 PANTIN
+N° d'immatriculation du véhicule :
+DS-301-FV
+Le montant du FPS dû est égal à : 35 euros.
+Ce FPS a cessé de produire ses effets le 17/10/2026 à 11h33.
+"""
+
+
+def test_fps_parsing():
+    out = fines.parse_fine_text(FPS_TEXT)
+    assert out["kind"] == "fps"
+    assert out["notice_number"] == "21930055500014261289003975"
+    assert out["plate"] == "DS-301-FV"
+    assert out["offense_at"] == datetime(2026, 10, 16, 10, 33)
+    assert out["location"] == "48 RUE DIDEROT 93500 PANTIN"
+    assert out["amount"] == 35.0
+    assert str(out["designation_deadline"]) == "2026-11-21"  # RAPO : 1 mois après l'envoi
+    assert fines.parse_fine_text(FINE_TEXT)["kind"] == "contravention"
+
+
+def test_fps_rebill_and_no_designation(owner, monkeypatch):
+    c = owner
+    c.form("/vehicles/new", data={"plate": "DS-301-FV", "brand": "Citroën", "model": "Jumper", "active": "on"})
+    c.form("/customers/new", data={"is_company": "on", "company_name": "Meubles SARL", "phone": "0600000000",
+                                   "first_name": "Alex", "last_name": "Test"})
+    c.form("/rentals/new", data={"vehicle_id": 1, "customer_id": 1, "starts_at": "2026-10-16T08:00",
+                                 "ends_at": "2026-10-16T18:00", "price_total": "77"})
+    db = SessionLocal()
+    org = db.scalar(select(Organization))
+    fine = Fine(organization_id=org.id, file_path="x")
+    for k, v in fines.parse_fine_text(FPS_TEXT).items():
+        setattr(fine, k, v)
+    db.add(fine)
+    db.flush()
+    fines.match(db, fine)
+    db.commit()
+    assert fine.status == FineStatus.MATCHED and fine.is_fps
+    fine_id = fine.id
+    db.close()
+
+    page = c.get(f"/fines/{fine_id}").text
+    assert "pas de désignation" in page and "robot/antai_designation.py" not in page
+
+    sent = []
+    monkeypatch.setattr(pennylane, "push_invoice", lambda org, inv, client=None: (sent.append(inv), setattr(inv, "status", "sent")))
+    c.form(f"/fines/{fine_id}", f"/fines/{fine_id}/rebill", data={"admin_fee": "15"})
+    db = SessionLocal()
+    fine = db.get(Fine, fine_id)
+    assert fine.status == FineStatus.REBILLED and fine.invoice_id
+    inv = db.get(Invoice, fine.invoice_id)
+    assert inv.total_ttc == 50.0 and inv.kind == "fps" and "21930055500014261289003975" in inv.lines[0]["label"]
+    db.close()
+
+    # la refacturation du FPS ne doit pas bloquer ni remplacer la facture de la location
+    c.form("/rentals/1", "/rentals/1/invoice")
+    db = SessionLocal()
+    kinds = sorted(i.kind for i in db.scalars(select(Invoice)))
+    assert kinds == ["fps", "rental"]
+    db.close()
+
+    r = c.form("/settings", "/settings/api-token")
+    token = r.text.split("<code>fb_")[1].split("</code>")[0]
+    h = {"Authorization": f"Bearer fb_{token}"}
+    assert c.get(f"/api/fines/{fine_id}/designation", headers=h).status_code == 409
+    assert c.get("/api/fines", headers=h).json() == []
+
+
+def test_add_missing_columns_migration(tmp_path):
+    from sqlalchemy import create_engine, inspect, text
+    import app.db as appdb
+    eng = create_engine(f"sqlite:///{tmp_path}/old.db")
+    with eng.begin() as conn:  # base d'une ancienne version : table fines sans colonne "kind"
+        conn.execute(text("CREATE TABLE fines (id INTEGER PRIMARY KEY, organization_id INTEGER, file_path VARCHAR)"))
+        conn.execute(text("INSERT INTO fines (organization_id, file_path) VALUES (1, 'a.pdf')"))
+    old = appdb.engine
+    appdb.engine = eng
+    try:
+        appdb.add_missing_columns()
+    finally:
+        appdb.engine = old
+    cols = {c["name"] for c in inspect(eng).get_columns("fines")}
+    assert {"kind", "invoice_id", "plate"} <= cols
+    with eng.connect() as conn:
+        assert conn.execute(text("SELECT kind FROM fines")).scalar() == "contravention"

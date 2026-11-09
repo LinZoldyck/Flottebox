@@ -16,7 +16,8 @@ router = APIRouter()
 
 @router.get("/api/fines")
 def api_fines(org: Organization = Depends(get_api_org), db: Session = Depends(get_db)):
-    items = db.scalars(select(Fine).where(Fine.organization_id == org.id, Fine.status == FineStatus.MATCHED)).all()
+    items = db.scalars(select(Fine).where(Fine.organization_id == org.id, Fine.status == FineStatus.MATCHED,
+                                       Fine.kind != "fps")).all()
     return [{"id": f.id, "numero_avis": f.notice_number, "immatriculation": f.plate,
              "date": f.offense_at.isoformat() if f.offense_at else None, "note": f.match_note} for f in items]
 
@@ -26,6 +27,9 @@ def api_designation(fine_id: int, org: Organization = Depends(get_api_org), db: 
     fine = db.get(Fine, fine_id)
     if not fine or fine.organization_id != org.id:
         raise HTTPException(status_code=404)
+    if fine.is_fps:
+        raise HTTPException(status_code=409, detail="Forfait post-stationnement : pas de désignation possible. "
+                                                    "Payez-le puis refacturez le locataire depuis l'application.")
     return designation_payload(org, fine)
 
 

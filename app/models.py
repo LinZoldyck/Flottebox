@@ -49,6 +49,7 @@ class FineStatus(str, enum.Enum):
     MATCHED = "matched"
     UNMATCHED = "unmatched"
     DESIGNATED = "designated"
+    REBILLED = "rebilled"
     IGNORED = "ignored"
 
     @property
@@ -58,6 +59,7 @@ class FineStatus(str, enum.Enum):
             "matched": "Conducteur identifié",
             "unmatched": "Non rapprochée",
             "designated": "Désignation faite",
+            "rebilled": "Refacturé au locataire",
             "ignored": "Ignorée",
         }[self.value]
 
@@ -288,6 +290,9 @@ class Fine(Base):
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     file_path: Mapped[str] = mapped_column(String(300))
     original_name: Mapped[str] = mapped_column(String(300), default="")
+    # contravention : amende, on désigne le conducteur (ANTAI)
+    # fps : forfait post-stationnement, non désignable -> le titulaire paie puis refacture le locataire
+    kind: Mapped[str] = mapped_column(String(20), default="contravention")
     notice_number: Mapped[str] = mapped_column(String(40), default="")
     plate: Mapped[str] = mapped_column(String(20), default="")
     offense_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -302,10 +307,15 @@ class Fine(Base):
     status: Mapped[FineStatus] = mapped_column(Enum(FineStatus), default=FineStatus.NEW)
     match_note: Mapped[str] = mapped_column(Text, default="")
     designated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    invoice_id: Mapped[int | None] = mapped_column(ForeignKey("invoices.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
 
     vehicle: Mapped[Vehicle | None] = relationship()
     rental: Mapped[Rental | None] = relationship()
+
+    @property
+    def is_fps(self) -> bool:
+        return self.kind == "fps"
 
 
 class Invoice(Base):
@@ -314,6 +324,7 @@ class Invoice(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     rental_id: Mapped[int] = mapped_column(ForeignKey("rentals.id"))
+    kind: Mapped[str] = mapped_column(String(20), default="rental")  # rental | fps (refacturation)
     lines: Mapped[list] = mapped_column(JSON, default=list)
     total_ttc: Mapped[float] = mapped_column(Float, default=0)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | sent | error

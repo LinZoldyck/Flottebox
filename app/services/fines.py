@@ -24,9 +24,12 @@ MATCH_TOLERANCE = timedelta(minutes=30)
 SUPPORTED = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
 _DT_RE = re.compile(r"(\d{2})/(\d{2})/(\d{4})\D{1,12}?(\d{1,2})\s*[hH:]\s*(\d{2})")
-_NOTICE_RE = re.compile(r"(?:avis|n°\s*d'avis|numero de l'avis|numéro de l'avis|N° avis)[^\d]{0,40}(\d[\d ]{8,18}\d)", re.I)
-_LOCATION_RE = re.compile(r"(?:lieu(?: de l'infraction)?|localisation)\s*:?\s*(.+)", re.I)
-_AMOUNT_RE = re.compile(r"(\d{1,4}[,.]\d{2})\s*(?:€|eur)", re.I)
+_NOTICE_RE = re.compile(r"(?:n°\s*d'avis|num[ée]ro de l'avis(?: de (?:contravention|paiement))?|N° avis)[^\d]{0,40}"
+                        r"(\d[\d ]{8,45}\d)", re.I)
+_LOCATION_RE = re.compile(r"(?:lieu(?: de l'infraction)?|localisation)\s*:?\s*(.+)(?:\n\s*(\d{5}\s+[^\n]+))?", re.I)
+_AMOUNT_RE = re.compile(r"(?:montant[^\n]{0,60}?|amende[^\n]{0,40}?)(\d{1,4}(?:[,.]\d{2})?)\s*(?:€|euros?\b|eur\b)", re.I)
+_FPS_RE = re.compile(r"post[\s-]?stationnement|\bFPS\b", re.I)
+_SENT_RE = re.compile(r"date d'envoi[^\d]{0,40}(\d{2})/(\d{2})/(\d{4})", re.I)
 _DEADLINE_RE = re.compile(r"(?:avant le|au plus tard le|date limite[^\d]{0,20})\s*(\d{2})/(\d{2})/(\d{4})", re.I)
 _OFFENSE_RE = re.compile(r"(?:nature de l'infraction|infraction)\s*:?\s*(.+)", re.I)
 
@@ -42,6 +45,7 @@ def extract_pdf_text(data: bytes) -> str:
 def parse_fine_text(text: str) -> dict:
     """Extraction par expressions régulières (avis PDF « texte »)."""
     out: dict = {}
+    out["kind"] = "fps" if _FPS_RE.search(text) else "contravention"
     out["plate"] = find_plate(text)
     m = _DT_RE.search(text)
     if m:
@@ -55,7 +59,7 @@ def parse_fine_text(text: str) -> dict:
         out["notice_number"] = m.group(1).replace(" ", "")
     m = _LOCATION_RE.search(text)
     if m:
-        out["location"] = m.group(1).strip()[:300]
+        out["location"] = " ".join(x.strip() for x in m.groups() if x)[:300]
     m = _OFFENSE_RE.search(text)
     if m:
         out["offense_type"] = m.group(1).strip()[:300]
@@ -69,7 +73,24 @@ def parse_fine_text(text: str) -> dict:
             out["designation_deadline"] = date(yyyy, mm, dd)
         except ValueError:
             pass
+    m = _SENT_RE.search(text)
+    if m and out["kind"] == "fps" and "designation_deadline" not in out:
+        dd, mm, yyyy = (int(x) for x in m.groups())
+        try:  # RAPO possible pendant 1 mois après l'envoi de l'avis de paiement
+            out["designation_deadline"] = add_one_month(date(yyyy, mm, dd))
+        except ValueError:
+            pass
     return out
+
+
+def add_one_month(d: date) -> date:
+    year, month = (d.year + 1, 1) if d.month == 12 else (d.year, d.month + 1)
+    for day in (d.day, 30, 29, 28):
+        try:
+            return date(year, month, day)
+        except ValueError:
+            continue
+    return d
 
 
 def analyse(fine: Fine, data: bytes, media_type: str) -> None:
@@ -86,6 +107,7 @@ def analyse(fine: Fine, data: bytes, media_type: str) -> None:
         if ai:
             fine.extraction_method = "claude"
             fields = {
+                "kind": "fps" if ai.is_fps else fields.get("kind", "contravention"),
                 "plate": normalize_plate(ai.plate) or fields.get("plate", ""),
                 "offense_at": ai_assistant.parse_date_time(ai.offense_date, ai.offense_time) or fields.get("offense_at"),
                 "notice_number": re.sub(r"\s", "", ai.notice_number) or fields.get("notice_number", ""),
@@ -111,7 +133,7 @@ def _parse_iso_date(value: str) -> date | None:
 
 def match(db: Session, fine: Fine) -> None:
     """Rapproche la contravention d'un véhicule puis de la location en cours au moment de l'infraction."""
-    if fine.status in (FineStatus.DESIGNATED, FineStatus.IGNORED):
+    if fine.status in (FineStatus.DESIGNATED, FineStatus.REBILLED, FineStatus.IGNORED):
         return
     fine.rental_id = None
     if not fine.plate or not fine.offense_at:

@@ -20,10 +20,10 @@
 <div class="card table-wrap"><table>
   <tr><th>Avis</th><th>Plaque</th><th>Date infraction</th><th>Lieu</th><th>Location / conducteur</th><th>Limite</th><th>Statut</th></tr>
   {% for f in fines %}<tr>
-    <td><a href="/fines/{{ f.id }}">{{ f.notice_number or ('#' ~ f.id) }}</a><br><span class="small muted">{{ f.original_name }}</span></td>
+    <td><a href="/fines/{{ f.id }}">{{ f.notice_number or ('#' ~ f.id) }}</a> {% if f.is_fps %}<span class="badge warn">FPS</span>{% endif %}<br><span class="small muted">{{ f.original_name }}</span></td>
     <td>{{ f.plate or '?' }}</td><td>{{ f.offense_at|dt }}</td><td class="small">{{ f.location }}</td>
     <td class="small">{{ f.match_note }}</td><td>{{ f.designation_deadline|d }}</td>
-    <td><span class="badge {{ 'ok' if f.status.value in ['matched','designated'] else 'err' if f.status.value=='unmatched' }}">{{ f.status.label }}</span></td></tr>
+    <td><span class="badge {{ 'ok' if f.status.value in ['matched','designated','rebilled'] else 'err' if f.status.value=='unmatched' }}">{{ f.status.label }}</span></td></tr>
   {% else %}<tr><td colspan="7" class="muted">Aucune contravention.</td></tr>{% endfor %}
 </table></div>
 {% endblock %}

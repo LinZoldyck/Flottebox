@@ -1,16 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row spread"><h1>Contravention {{ fine.notice_number or ('#' ~ fine.id) }}</h1>
+<div class="row spread"><h1>{{ 'Forfait post-stationnement' if fine.is_fps else 'Contravention' }} {{ fine.notice_number or ('#' ~ fine.id) }}</h1>
   <a class="btn secondary" href="/files/{{ fine.file_path }}" target="_blank">Voir l'avis</a></div>
 <div class="grid">
   <form method="post" class="card stack">{{ csrf }}
     <h2>Informations extraites <span class="badge">{{ fine.extraction_method or 'manuel' }}</span></h2>
+    <label>Type d'avis
+      <select name="kind">
+        <option value="contravention" {{ 'selected' if not fine.is_fps }}>Avis de contravention (amende) — désignation du conducteur</option>
+        <option value="fps" {{ 'selected' if fine.is_fps }}>Forfait post-stationnement (FPS) — à payer puis refacturer</option>
+      </select></label>
     <div class="fields">
       <label>N° d'avis <input name="notice_number" value="{{ fine.notice_number }}"></label>
       <label>Immatriculation <input name="plate" value="{{ fine.plate }}"></label>
       <label>Date et heure <input type="datetime-local" name="offense_at" value="{{ fine.offense_at.strftime('%Y-%m-%dT%H:%M') if fine.offense_at }}"></label>
       <label>Montant (€) <input name="amount" value="{{ fine.amount if fine.amount is not none }}"></label>
-      <label>Date limite <input type="date" name="designation_deadline" value="{{ fine.designation_deadline or '' }}"></label>
+      <label>{{ 'Date limite de recours (RAPO)' if fine.is_fps else 'Date limite' }} <input type="date" name="designation_deadline" value="{{ fine.designation_deadline or '' }}"></label>
     </div>
     <label>Lieu <input name="location" value="{{ fine.location }}"></label>
     <label>Infraction <input name="offense_type" value="{{ fine.offense_type }}"></label>
@@ -25,11 +30,32 @@
     <h2>Résultat</h2>
     <p><span class="badge">{{ fine.status.label }}</span> {{ fine.match_note }}</p>
     {% if fine.rental %}<p><a href="/rentals/{{ fine.rental.id }}">Voir la location {{ fine.rental.reference }}</a></p>{% endif %}
+    {% if fine.is_fps %}
+    <h2>Forfait post-stationnement : pas de désignation</h2>
+    <p class="small">Depuis la réforme du stationnement payant (2018), le FPS est dû par le <b>titulaire du certificat
+      d'immatriculation</b> : il ne peut pas être transféré au conducteur par une désignation ANTAI. La marche à suivre :</p>
+    <ol class="small">
+      <li>Payer le FPS avant la date limite (ou former un RAPO auprès de la collectivité dans le mois s'il est contestable).</li>
+      <li>Refacturer le montant au locataire, conformément à votre contrat de location.</li>
+    </ol>
+    {% if fine.rental and fine.rental.source.value == 'direct' %}
+      {% if fine.invoice_id %}<p><span class="badge ok">Refacturé</span> facture #{{ fine.invoice_id }} — <a href="/invoices">voir les factures</a></p>
+        {% if user.role.value != 'viewer' %}<form method="post" action="/fines/{{ fine.id }}/rebill">{{ csrf }}<button class="secondary">Renvoyer à Pennylane si l'envoi a échoué</button></form>{% endif %}
+      {% elif user.role.value != 'viewer' %}
+      <form method="post" action="/fines/{{ fine.id }}/rebill" class="row">{{ csrf }}
+        <label>Frais de gestion TTC (€) <input name="admin_fee" value="0" style="width:120px"></label>
+        <button>Refacturer {{ fine.amount|euros }} au locataire (Pennylane)</button>
+      </form>{% endif %}
+    {% elif fine.rental %}
+      <p class="small">Location Getaround : déclarez ce FPS dans votre espace propriétaire Getaround pour en obtenir le remboursement.</p>
+    {% endif %}
+    {% else %}
     {% if designation.manquants %}<div class="flash error">Informations manquantes pour désigner : {{ designation.manquants|join(', ') }}</div>{% endif %}
     <h2 id="robot">Désignation du conducteur (ANTAI)</h2>
     <p class="small">Lancez le robot sur votre ordinateur : il ouvre le site de l'ANTAI et remplit chaque étape. Vous gardez la main sur le captcha et la validation finale.</p>
     <pre>python robot/antai_designation.py --fine {{ fine.id }}</pre>
     <details><summary class="small">Données transmises au robot</summary><pre>{{ designation|tojson(indent=2) }}</pre></details>
+    {% endif %}
     {% if user.role.value != 'viewer' %}
     <form method="post" action="/fines/{{ fine.id }}/status" class="row">{{ csrf }}
       <select name="status" style="width:auto">{% for s in fine.status.__class__ %}<option value="{{ s.value }}" {{ 'selected' if s==fine.status }}>{{ s.label }}</option>{% endfor %}</select>

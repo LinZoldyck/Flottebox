@@ -38,6 +38,8 @@ class AssistantDecision(BaseModel):
 
 
 class FineExtraction(BaseModel):
+    is_fps: bool = Field(description="true si c'est un avis de paiement de forfait post-stationnement (FPS), "
+                                     "false si c'est un avis de contravention (amende)")
     notice_number: str = Field(description="Numéro de l'avis de contravention (vide si absent)")
     plate: str = Field(description="Immatriculation du véhicule, format AB-123-CD")
     offense_date: str = Field(description="Date de l'infraction au format AAAA-MM-JJ")
@@ -45,7 +47,8 @@ class FineExtraction(BaseModel):
     location: str = Field(description="Lieu de l'infraction")
     offense_type: str = Field(description="Nature de l'infraction")
     amount: float | None = Field(description="Montant de l'amende forfaitaire en euros")
-    designation_deadline: str = Field(description="Date limite de désignation/paiement AAAA-MM-JJ si indiquée, sinon vide")
+    designation_deadline: str = Field(description="Date limite de désignation ou de recours AAAA-MM-JJ si indiquée ; "
+                                                  "pour un FPS : date d'envoi de l'avis + 1 mois. Sinon vide")
 
 
 SYSTEM_PROMPT = """Tu es l'assistant de messagerie d'une société de location de véhicules utilitaires en autopartage \

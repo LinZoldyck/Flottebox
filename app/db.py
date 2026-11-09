@@ -41,3 +41,28 @@ def init_db() -> None:
     from app import models  # noqa: F401  (enregistre les tables)
 
     Base.metadata.create_all(bind=engine)
+    add_missing_columns()
+
+
+def add_missing_columns() -> None:
+    """Migration minimale : ajoute les colonnes apparues dans une nouvelle version (sans perte de données).
+    Les colonnes ajoutées reçoivent la valeur par défaut déclarée dans le modèle."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        tables = set(insp.get_table_names())
+        for table in Base.metadata.sorted_tables:
+            if table.name not in tables:
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing:
+                    continue
+                ddl = f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col.type.compile(engine.dialect)}'
+                default = col.default.arg if col.default is not None and not callable(col.default.arg) else None
+                if isinstance(default, str):
+                    ddl += " DEFAULT '" + default.replace("'", "''") + "'"
+                elif isinstance(default, (int, float)) and not isinstance(default, bool):
+                    ddl += f" DEFAULT {default}"
+                conn.execute(text(ddl))

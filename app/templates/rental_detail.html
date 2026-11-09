@@ -55,8 +55,8 @@
 {% if rental.source.value == 'direct' %}
 <div class="card">
   <h2>Facturation Pennylane</h2>
-  {% for inv in rental.invoices %}<p class="small">Facture #{{ inv.id }} — {{ inv.total_ttc|euros }} TTC — <span class="badge {{ 'ok' if inv.status=='sent' else 'err' if inv.status=='error' }}">{{ inv.status }}</span> {{ inv.error }}</p>{% endfor %}
-  {% if user.role.value != 'viewer' and not (rental.invoices|selectattr('status','equalto','sent')|list) %}
+  {% for inv in rental.invoices %}<p class="small">{{ 'Refacturation FPS' if inv.kind == 'fps' else 'Facture' }} #{{ inv.id }} — {{ inv.total_ttc|euros }} TTC — <span class="badge {{ 'ok' if inv.status=='sent' else 'err' if inv.status=='error' }}">{{ inv.status }}</span> {{ inv.error }}</p>{% endfor %}
+  {% if user.role.value != 'viewer' and not (rental.invoices|selectattr('kind','equalto','rental')|selectattr('status','equalto','sent')|list) %}
   <form method="post" action="/rentals/{{ rental.id }}/invoice">{{ csrf }}<button>Créer la facture dans Pennylane (brouillon)</button></form>
   {% endif %}
   {% if user.role.value != 'viewer' %}<form method="post" action="/rentals/{{ rental.id }}/contract" style="margin-top:8px">{{ csrf }}<button class="secondary">Régénérer le contrat PDF</button></form>{% endif %}

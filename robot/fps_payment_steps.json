@@ -1,0 +1,25 @@
+{
+  "_comment": "Étapes du paiement d'un FPS. Les libellés sont des expressions régulières recherchées dans les <label> du site. Si le numéro d'avis se saisit case par case, 'segments_locator' désigne ces cases (dans l'ordre). Vérifiez lors de la première utilisation. La carte bancaire n'est jamais saisie par le robot.",
+  "start_url": "https://www.antai.gouv.fr/",
+  "steps": [
+    {
+      "name": "Accès au paiement du FPS",
+      "before": "Dans le navigateur ouvert, allez jusqu'au formulaire de paiement d'un forfait post-stationnement (FPS), puis revenez ici."
+    },
+    {
+      "name": "Identification de l'avis de paiement",
+      "fields": [
+        {"type": "notice", "description": "Numéro de l'avis de paiement", "value": "numero_avis",
+         "locator": {"label": "num[ée]ro.*avis"},
+         "segments_locator": {"css": "form input[type=text]:not([name*=cle i]):not([id*=cle i])"}},
+        {"description": "Clé", "value": "cle", "locator": {"label": "^cl[ée]"}}
+      ],
+      "next": {"role": "button", "name": "suivant|continuer|valider|rechercher"}
+    },
+    {
+      "name": "Vérification du montant",
+      "check_amount": true,
+      "manual": "Vérifiez le récapitulatif (montant, immatriculation, date), puis saisissez VOUS-MÊME votre carte bancaire et validez le paiement. Téléchargez le justificatif."
+    }
+  ]
+}

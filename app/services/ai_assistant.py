@@ -38,14 +38,20 @@ class AssistantDecision(BaseModel):
 
 
 class FineExtraction(BaseModel):
-    notice_number: str = Field(description="Numéro de l'avis de contravention (vide si absent)")
+    is_fps: bool = Field(description="true si c'est un avis de paiement de forfait post-stationnement (FPS), "
+                                     "false si c'est un avis de contravention (amende)")
+    notice_number: str = Field(description="Numéro de l'avis (contravention ou avis de paiement FPS), en gardant "
+                                           "les espaces entre les groupes de chiffres tels qu'imprimés ; vide si absent")
+    payment_key: str = Field(description="Clé de contrôle imprimée à côté du numéro d'avis (souvent « Clé 73 »), vide si absente")
+    notice_sent_date: str = Field(description="Date d'envoi de l'avis AAAA-MM-JJ, vide si absente")
     plate: str = Field(description="Immatriculation du véhicule, format AB-123-CD")
     offense_date: str = Field(description="Date de l'infraction au format AAAA-MM-JJ")
     offense_time: str = Field(description="Heure de l'infraction au format HH:MM (24h)")
     location: str = Field(description="Lieu de l'infraction")
     offense_type: str = Field(description="Nature de l'infraction")
     amount: float | None = Field(description="Montant de l'amende forfaitaire en euros")
-    designation_deadline: str = Field(description="Date limite de désignation/paiement AAAA-MM-JJ si indiquée, sinon vide")
+    designation_deadline: str = Field(description="Date limite de désignation ou de recours AAAA-MM-JJ si indiquée ; "
+                                                  "pour un FPS : date d'envoi de l'avis + 1 mois. Sinon vide")
 
 
 SYSTEM_PROMPT = """Tu es l'assistant de messagerie d'une société de location de véhicules utilitaires en autopartage \

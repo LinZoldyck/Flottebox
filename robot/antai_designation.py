@@ -35,9 +35,15 @@ def api(base: str, token: str) -> httpx.Client:
 
 
 def lookup(data: dict, dotted: str) -> str:
+    """'conducteur.nom', 'segments.0' -> valeur (chaîne vide si absente)."""
     cur: object = data
     for part in dotted.split("."):
-        cur = cur.get(part) if isinstance(cur, dict) else None
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            cur = None
     return "" if cur is None else str(cur)
 
 
@@ -90,7 +96,10 @@ def run(fine_id: int, base: str, token: str, steps_file: Path, slow_mo: int) -> 
     from playwright.sync_api import sync_playwright
 
     client = api(base, token)
-    data = client.get(f"/api/fines/{fine_id}/designation").raise_for_status().json()
+    resp = client.get(f"/api/fines/{fine_id}/designation")
+    if resp.status_code == 409:
+        sys.exit(f"✖ {resp.json().get('detail')}")
+    data = resp.raise_for_status().json()
     print(json.dumps(data, indent=2, ensure_ascii=False))
     if data.get("manquants"):
         print(f"\n⚠ Informations manquantes : {', '.join(data['manquants'])}")

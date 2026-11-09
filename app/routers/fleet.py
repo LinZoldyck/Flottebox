@@ -265,8 +265,9 @@ def rental_contract(rental_id: int, user: User = Depends(get_current_user), db: 
 def rental_invoice(request: Request, rental_id: int, user: User = Depends(manager), db: Session = Depends(get_db)):
     rental = _get(db, Rental, rental_id, user)
     org = db.get(Organization, user.organization_id)
-    invoice = next((i for i in rental.invoices if i.status != "sent"), None)
-    if any(i.status == "sent" for i in rental.invoices):
+    rental_invoices = [i for i in rental.invoices if i.kind == "rental"]
+    invoice = next((i for i in rental_invoices if i.status != "sent"), None)
+    if any(i.status == "sent" for i in rental_invoices):
         flash(request, "Une facture a déjà été envoyée à Pennylane pour cette location.", "error")
         return RedirectResponse(f"/rentals/{rental.id}", status_code=303)
     if not invoice:

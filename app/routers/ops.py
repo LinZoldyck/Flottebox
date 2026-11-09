@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.models import Fine, FineStatus, Message, Organization, Rental, Role, User
+from app.models import Fine, FineStatus, Invoice, Message, Organization, Rental, RentalSource, Role, User
 from app.routers.fleet import _get, manager
 from app.security import flash, get_current_user, hash_token, new_api_token, require_role
-from app.services import contracts, fines, getaround, jobs
+from app.services import contracts, fines, getaround, jobs, pennylane
 from app.services.storage import UploadError, save_image
 from app.utils import normalize_plate, now_local
 from app.web import csrf_protect, render
@@ -63,16 +63,22 @@ def fine_detail(request: Request, fine_id: int, user: User = Depends(get_current
         candidates = db.scalars(select(Rental).where(Rental.vehicle_id == fine.vehicle_id)
                                 .order_by(Rental.starts_at.desc()).limit(30)).all()
     return render(request, "fine_detail.html", user=user, fine=fine, candidates=candidates,
-                  designation=designation_payload(db.get(Organization, user.organization_id), fine))
+                  designation=designation_payload(db.get(Organization, user.organization_id), fine),
+                  payment=payment_payload(fine), today=now_local().date())
 
 
 @router.post("/fines/{fine_id}")
 def fine_update(request: Request, fine_id: int, notice_number: str = Form(""), plate: str = Form(""),
                 offense_at: str = Form(""), location: str = Form(""), offense_type: str = Form(""),
                 amount: str = Form(""), designation_deadline: str = Form(""), rental_id: str = Form(""),
+                kind: str = Form("contravention"), payment_key: str = Form(""), notice_sent_date: str = Form(""),
                 user: User = Depends(manager), db: Session = Depends(get_db)):
     fine = _get(db, Fine, fine_id, user)
-    fine.notice_number, fine.plate = notice_number.strip(), normalize_plate(plate)
+    fine.kind = "fps" if kind == "fps" else "contravention"
+    fine.notice_display = " ".join(notice_number.split())
+    fine.notice_number, fine.plate = fine.notice_display.replace(" ", ""), normalize_plate(plate)
+    fine.payment_key = "".join(ch for ch in payment_key if ch.isdigit())[:4]
+    fine.notice_sent_date = date.fromisoformat(notice_sent_date) if notice_sent_date else None
     fine.offense_at = datetime.fromisoformat(offense_at) if offense_at else None
     fine.location, fine.offense_type = location.strip(), offense_type.strip()
     fine.amount = float(amount.replace(",", ".")) if amount.strip() else None
@@ -88,6 +94,41 @@ def fine_update(request: Request, fine_id: int, notice_number: str = Form(""), p
     return RedirectResponse(f"/fines/{fine.id}", status_code=303)
 
 
+@router.post("/fines/{fine_id}/paid")
+def fine_paid(request: Request, fine_id: int, paid_amount: str = Form(""), paid_on: str = Form(""),
+              undo: bool = Form(False), user: User = Depends(manager), db: Session = Depends(get_db)):
+    fine = _get(db, Fine, fine_id, user)
+    if undo:
+        fine.paid_at, fine.paid_amount = None, None
+    else:
+        fine.paid_at = datetime.fromisoformat(paid_on) if paid_on else now_local()
+        try:
+            fine.paid_amount = float(paid_amount.replace(",", ".")) if paid_amount.strip() else fine.amount
+        except ValueError:
+            fine.paid_amount = fine.amount
+    db.commit()
+    flash(request, "Paiement annulé." if undo else "FPS marqué comme payé.", "success")
+    return RedirectResponse(f"/fines/{fine.id}", status_code=303)
+
+
+def payment_payload(fine: Fine) -> dict:
+    """Données de pré-remplissage du paiement d'un FPS (utilisées par la fiche et le robot de paiement)."""
+    return {
+        "fine_id": fine.id,
+        "numero_avis": fine.notice_number,
+        "numero_avis_imprime": fine.notice_display or fine.notice_number,
+        "segments": fine.notice_segments,
+        "cle": fine.payment_key,
+        "montant": fine.amount,
+        "immatriculation": fine.plate.replace("-", ""),
+        "date_stationnement": f"{fine.offense_at:%d/%m/%Y}" if fine.offense_at else "",
+        "date_envoi": f"{fine.notice_sent_date:%d/%m/%Y}" if fine.notice_sent_date else "",
+        "payer_avant": f"{fine.payment_deadline:%d/%m/%Y}" if fine.payment_deadline else "",
+        "manquants": [label for label, value in [("Numéro d'avis", fine.notice_number), ("Clé", fine.payment_key),
+                                                 ("Montant", fine.amount)] if not value],
+    }
+
+
 @router.post("/fines/{fine_id}/status")
 def fine_status(request: Request, fine_id: int, status: FineStatus = Form(...), user: User = Depends(manager),
                 db: Session = Depends(get_db)):
@@ -99,11 +140,58 @@ def fine_status(request: Request, fine_id: int, status: FineStatus = Form(...), 
     return RedirectResponse(f"/fines/{fine.id}", status_code=303)
 
 
+@router.post("/fines/{fine_id}/rebill")
+def fine_rebill(request: Request, fine_id: int, admin_fee: str = Form("0"), user: User = Depends(manager),
+                db: Session = Depends(get_db)):
+    """FPS : le titulaire paie, puis refacture le montant (et d'éventuels frais de gestion) au locataire."""
+    fine = _get(db, Fine, fine_id, user)
+    org = db.get(Organization, user.organization_id)
+    back = RedirectResponse(f"/fines/{fine.id}", status_code=303)
+    if not fine.rental or fine.rental.source != RentalSource.DIRECT:
+        flash(request, "Refacturation possible seulement pour une location directe (Getaround : déclarez le FPS "
+                       "dans votre espace propriétaire Getaround).", "error")
+        return back
+    if fine.invoice_id:
+        invoice = db.get(Invoice, fine.invoice_id)
+        if invoice.status == "sent":
+            flash(request, "Ce FPS a déjà été refacturé.", "error")
+            return back
+        pennylane.push_invoice(org, invoice)  # nouvel essai d'envoi
+        db.commit()
+        flash(request, "Facture envoyée à Pennylane." if invoice.status == "sent"
+              else f"Envoi Pennylane en échec : {invoice.error}", "success" if invoice.status == "sent" else "error")
+        return back
+    try:
+        fee = float(admin_fee.replace(",", ".") or 0)
+    except ValueError:
+        fee = 0
+    lines = [{"label": f"Refacturation forfait post-stationnement n° {fine.notice_number} du "
+                       f"{fine.offense_at:%d/%m/%Y %H:%M} ({fine.location}) — véhicule {fine.plate}, "
+                       f"contrat {fine.rental.reference}",
+              "quantity": 1, "unit_price_ttc": round(fine.amount or 0, 2)}]
+    if fee > 0:
+        lines.append({"label": "Frais de gestion du FPS", "quantity": 1, "unit_price_ttc": round(fee, 2)})
+    invoice = Invoice(organization_id=org.id, rental_id=fine.rental.id, rental=fine.rental, kind="fps", lines=lines,
+                      total_ttc=round(sum(line["unit_price_ttc"] for line in lines), 2))
+    db.add(invoice)
+    db.flush()
+    pennylane.push_invoice(org, invoice)
+    fine.invoice_id = invoice.id
+    fine.status = FineStatus.REBILLED
+    db.commit()
+    if invoice.status == "sent":
+        flash(request, "Facture de refacturation créée en brouillon dans Pennylane.", "success")
+    else:
+        flash(request, f"Facture enregistrée, envoi Pennylane en échec : {invoice.error}", "error")
+    return back
+
+
 def designation_payload(org: Organization, fine: Fine) -> dict:
     """Données attendues par le formulaire de désignation ANTAI (utilisées par le robot)."""
     c = fine.rental.customer if fine.rental and fine.rental.customer else None
     return {
         "fine_id": fine.id,
+        "type": fine.kind,
         "avis": {
             "numero_avis": fine.notice_number,
             "immatriculation": fine.plate.replace("-", ""),

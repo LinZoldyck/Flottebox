@@ -49,6 +49,7 @@ class FineStatus(str, enum.Enum):
     MATCHED = "matched"
     UNMATCHED = "unmatched"
     DESIGNATED = "designated"
+    REBILLED = "rebilled"
     IGNORED = "ignored"
 
     @property
@@ -58,6 +59,7 @@ class FineStatus(str, enum.Enum):
             "matched": "Conducteur identifié",
             "unmatched": "Non rapprochée",
             "designated": "Désignation faite",
+            "rebilled": "Refacturé au locataire",
             "ignored": "Ignorée",
         }[self.value]
 
@@ -288,6 +290,9 @@ class Fine(Base):
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     file_path: Mapped[str] = mapped_column(String(300))
     original_name: Mapped[str] = mapped_column(String(300), default="")
+    # contravention : amende, on désigne le conducteur (ANTAI)
+    # fps : forfait post-stationnement, non désignable -> le titulaire paie puis refacture le locataire
+    kind: Mapped[str] = mapped_column(String(20), default="contravention")
     notice_number: Mapped[str] = mapped_column(String(40), default="")
     plate: Mapped[str] = mapped_column(String(20), default="")
     offense_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -302,10 +307,43 @@ class Fine(Base):
     status: Mapped[FineStatus] = mapped_column(Enum(FineStatus), default=FineStatus.NEW)
     match_note: Mapped[str] = mapped_column(Text, default="")
     designated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    invoice_id: Mapped[int | None] = mapped_column(ForeignKey("invoices.id"), nullable=True)
+    # Paiement (FPS) : numéro tel qu'imprimé par groupes, clé de contrôle, date d'envoi de l'avis
+    notice_display: Mapped[str] = mapped_column(String(60), default="")
+    payment_key: Mapped[str] = mapped_column(String(4), default="")
+    notice_sent_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    paid_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
 
     vehicle: Mapped[Vehicle | None] = relationship()
     rental: Mapped[Rental | None] = relationship()
+
+    @property
+    def is_fps(self) -> bool:
+        return self.kind == "fps"
+
+    @property
+    def notice_segments(self) -> list[str]:
+        """Groupes du numéro d'avis, tels qu'ils sont saisis case par case sur les sites de paiement."""
+        if self.notice_display and self.notice_display.replace(" ", "") == self.notice_number:
+            return self.notice_display.split()
+        n = self.notice_number
+        if len(n) == 26:  # format des avis de paiement FPS : 14 + 2 + 1 + 3 + 3 + 3
+            cuts, out, i = (14, 2, 1, 3, 3, 3), [], 0
+            for c in cuts:
+                out.append(n[i:i + c])
+                i += c
+            return out
+        return [n] if n else []
+
+    @property
+    def payment_deadline(self) -> date | None:
+        """FPS : au-delà de 3 mois après l'envoi de l'avis, il devient un FPS majoré (recouvré par l'ANTAI)."""
+        if not self.notice_sent_date:
+            return None
+        from app.utils import add_months
+        return add_months(self.notice_sent_date, 3)
 
 
 class Invoice(Base):
@@ -314,6 +352,7 @@ class Invoice(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     rental_id: Mapped[int] = mapped_column(ForeignKey("rentals.id"))
+    kind: Mapped[str] = mapped_column(String(20), default="rental")  # rental | fps (refacturation)
     lines: Mapped[list] = mapped_column(JSON, default=list)
     total_ttc: Mapped[float] = mapped_column(Float, default=0)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | sent | error

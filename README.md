@@ -11,7 +11,7 @@ Elle est pensée dès le départ pour devenir un SaaS : chaque société a son p
 | Parcours Getaround (cas n°2) | Les réservations Getaround sont synchronisées (API Owner + webhooks). Le déverrouillage (Getaround Connect) et le contrat restent dans l'application Getaround : l'API publique ne permet pas d'ouvrir le véhicule. |
 | 3. Assistant de messagerie Getaround | Les messages des locataires sont relevés toutes les 5 min. **Claude** répond seul aux questions simples (accès, horaires, carburant…) à partir de votre base de connaissances. Tout ce qui engage une décision (argent, dommages, annulation, accident, PV, litige…) vous est **transmis**, avec un double filtre : mots-clés côté serveur et décision du modèle. Trois modes : désactivé, brouillon à valider (par défaut) ou automatique. |
 | 4. Contraventions → location | Déposez les avis (PDF, photo) dans l'appli ou dans un **dossier surveillé**. Les PDF texte sont lus localement ; les scans sont lus par Claude. L'appli retrouve ensuite le véhicule (plaque) et la location en cours à l'heure de l'infraction, **directe ou Getaround**. |
-| 5. Désignation du conducteur | Un robot (Playwright) ouvre le site de l'ANTAI dans un vrai navigateur et **remplit chaque étape** : avis, société, conducteur. **Captcha et validation restent à vous.** |
+| 5. Désignation du conducteur / paiement des FPS | Un robot (Playwright) ouvre le site de l'ANTAI dans un vrai navigateur et **remplit chaque étape** : avis, société, conducteur. **Captcha et validation restent à vous.** |
 | 6. Factures Pennylane | Depuis une location terminée : création du client, puis de la facture (location + km supplémentaires) **en brouillon** dans Pennylane, sans doublon. |
 
 ## Démarrage rapide (sur un ordinateur)
@@ -98,6 +98,18 @@ python robot/antai_designation.py --list
 python robot/antai_designation.py --fine 12
 ```
 Les étapes et les libellés des champs sont décrits dans `robot/antai_steps.json`. Si un champ n'est pas trouvé, le robot vous donne la valeur à saisir et attend. **Vérifiez les libellés lors de la première utilisation** : le site de l'ANTAI peut évoluer.
+
+### Forfaits post-stationnement (FPS)
+Un FPS ne se désigne pas : le titulaire de la carte grise le paie, puis le refacture au locataire. Quand un FPS est déposé, l'application :
+* lit le numéro de l'avis de paiement (par groupes), la **clé**, le montant et la date d'envoi, et calcule la date limite de recours (1 mois) et de paiement (3 mois, avant majoration) ;
+* affiche une fiche **« Payer ce FPS »** avec boutons de copie et lien vers le site officiel ;
+* propose un robot de pré-remplissage du paiement, qui ne saisit **jamais** la carte bancaire :
+  ```bash
+  python robot/fps_payment.py --list      # FPS restant à payer
+  python robot/fps_payment.py --fine 12   # remplit numéro d'avis + clé, vérifie le montant, puis vous laisse payer
+  ```
+  Les étapes et les libellés sont dans `robot/fps_payment_steps.json`. Le numéro se remplit dans un seul champ ou case par case. Vérifiez les libellés lors du premier paiement.
+* une fois le FPS payé, permet de le **refacturer** au locataire (Pennylane, brouillon), frais de gestion compris si vous le souhaitez.
 
 ## Tests
 
